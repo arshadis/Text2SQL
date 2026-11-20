@@ -1,0 +1,577 @@
+[
+  {
+    "id": "q01",
+    "difficulty": "easy",
+    "question_en": "Who is top of the league table?",
+    "question_fa": "جدول لیگ را چه تیمی صدرنشین است؟",
+    "gold_sql": "SELECT team, played, points, goal_diff FROM v_standings ORDER BY points DESC, goal_diff DESC, goals_for DESC LIMIT 1",
+    "notes": "Tiebreak on goal difference; Persepolis and Sepahan are level on points.",
+    "expected_columns": [
+      "team",
+      "played",
+      "points",
+      "goal_diff"
+    ],
+    "expected_rows": [
+      [
+        "Persepolis",
+        11,
+        23,
+        14
+      ]
+    ]
+  },
+  {
+    "id": "q02",
+    "difficulty": "easy",
+    "question_en": "What was the score of the Tehran derby (Esteghlal vs Persepolis)?",
+    "question_fa": "نتیجهٔ دربی استقلال و پرسپولیس چه شد؟",
+    "gold_sql": "SELECT m.round, m.match_date, h.name AS home, a.name AS away, m.home_goals, m.away_goals\nFROM match m JOIN team h ON h.team_id = m.home_team_id JOIN team a ON a.team_id = m.away_team_id\nWHERE m.status = 'finished'\n  AND ((h.name = 'Esteghlal' AND a.name = 'Persepolis') OR (h.name = 'Persepolis' AND a.name = 'Esteghlal'))",
+    "notes": "Either side can be home; precedence of AND/OR matters.",
+    "expected_columns": [
+      "round",
+      "match_date",
+      "home",
+      "away",
+      "home_goals",
+      "away_goals"
+    ],
+    "expected_rows": [
+      [
+        5,
+        "2026-09-02",
+        "Esteghlal",
+        "Persepolis",
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "id": "q03",
+    "difficulty": "easy",
+    "question_en": "How many matches have been played so far?",
+    "question_fa": "تا الان چند بازی انجام شده؟",
+    "gold_sql": "SELECT COUNT(*) AS played FROM match WHERE status = 'finished'",
+    "notes": "Must exclude scheduled and cancelled; the awarded (forfeit) match is not 'played'.",
+    "expected_columns": [
+      "played"
+    ],
+    "expected_rows": [
+      [
+        95
+      ]
+    ]
+  },
+  {
+    "id": "q04",
+    "difficulty": "medium",
+    "question_en": "Top 5 scorers (own goals excluded) with their team.",
+    "question_fa": "۵ گلزن برتر لیگ؟",
+    "gold_sql": "SELECT p.name_fa AS player, t.name AS team, COUNT(*) AS goals\nFROM goal g JOIN player p ON p.player_id = g.player_id JOIN team t ON t.team_id = g.scorer_team_id\nWHERE g.is_own_goal = 0\nGROUP BY g.player_id ORDER BY goals DESC, player LIMIT 5",
+    "notes": "Wrong-join trap: joining team on goal.team_id would attribute own-goal scorers to the wrong club; also own goals must be excluded.",
+    "expected_columns": [
+      "player",
+      "team",
+      "goals"
+    ],
+    "expected_rows": [
+      [
+        "امیرحسین حسین زاده",
+        "Tractor",
+        5
+      ],
+      [
+        "کسری طاهری",
+        "Sepahan",
+        5
+      ],
+      [
+        "امیرحسین فارسی",
+        "Kheybar Khorramabad",
+        4
+      ],
+      [
+        "عرفان شهریاری",
+        "Malavan",
+        4
+      ],
+      [
+        "علی علیپور",
+        "Persepolis",
+        4
+      ]
+    ]
+  },
+  {
+    "id": "q05",
+    "difficulty": "medium",
+    "question_en": "Which team has received the most red cards (including second yellows)?",
+    "question_fa": "کدام تیم بیشترین کارت قرمز را گرفته؟",
+    "gold_sql": "SELECT t.name AS team, COUNT(*) AS reds FROM card c JOIN team t ON t.team_id = c.team_id\nWHERE c.card_type IN ('red','second_yellow') GROUP BY t.team_id ORDER BY reds DESC, team",
+    "notes": "A second yellow is a sending-off.",
+    "expected_columns": [
+      "team",
+      "reds"
+    ],
+    "expected_rows": [
+      [
+        "Mes Shahr-e Babak",
+        4
+      ],
+      [
+        "Kheybar Khorramabad",
+        3
+      ],
+      [
+        "Malavan",
+        3
+      ],
+      [
+        "Chadormalu Ardakan",
+        2
+      ],
+      [
+        "Fajr Sepasi",
+        2
+      ],
+      [
+        "Paykan",
+        2
+      ],
+      [
+        "Sepahan",
+        2
+      ],
+      [
+        "Zob Ahan",
+        2
+      ],
+      [
+        "Aluminium Arak",
+        1
+      ],
+      [
+        "Esteghlal",
+        1
+      ],
+      [
+        "Gol Gohar Sirjan",
+        1
+      ],
+      [
+        "Nassaji Mazandaran",
+        1
+      ]
+    ]
+  },
+  {
+    "id": "q06",
+    "difficulty": "medium",
+    "question_en": "Which referee has shown the most yellow cards?",
+    "question_fa": "کدام داور بیشترین کارت زرد را داده؟",
+    "gold_sql": "SELECT r.name_fa AS referee, COUNT(*) AS yellows\nFROM card c JOIN match m ON m.match_id = c.match_id JOIN referee r ON r.referee_id = m.referee_id\nWHERE c.card_type = 'yellow' GROUP BY r.referee_id ORDER BY yellows DESC, referee LIMIT 3",
+    "notes": "Referee lives on match, not on card.",
+    "expected_columns": [
+      "referee",
+      "yellows"
+    ],
+    "expected_rows": [
+      [
+        "پیام حیدری",
+        26
+      ],
+      [
+        "سیدوحید کاظمی",
+        24
+      ],
+      [
+        "سیدرضا مهدوی",
+        23
+      ]
+    ]
+  },
+  {
+    "id": "q07",
+    "difficulty": "medium",
+    "question_en": "Best home record: which team has the most points at home?",
+    "question_fa": "بهترین تیم میزبان کدام است؟",
+    "gold_sql": "SELECT t.name AS team, SUM(CASE outcome WHEN 'W' THEN 3 WHEN 'D' THEN 1 ELSE 0 END) AS home_points\nFROM v_team_match tm JOIN team t ON t.team_id = tm.team_id\nWHERE tm.venue = 'home' GROUP BY t.team_id ORDER BY home_points DESC, team LIMIT 3",
+    "notes": "",
+    "expected_columns": [
+      "team",
+      "home_points"
+    ],
+    "expected_rows": [
+      [
+        "Esteghlal",
+        13
+      ],
+      [
+        "Tractor",
+        13
+      ],
+      [
+        "Foolad",
+        12
+      ]
+    ]
+  },
+  {
+    "id": "q08",
+    "difficulty": "medium",
+    "question_en": "How many penalties were awarded and how many were converted?",
+    "question_fa": "چند پنالتی گرفته شد و چندتا گل شد؟",
+    "gold_sql": "SELECT COUNT(*) AS awarded, SUM(outcome = 'scored') AS scored FROM penalty",
+    "notes": "Do not count penalties from the goal table: converted penalties appear in both goal (is_penalty=1) and penalty.",
+    "expected_columns": [
+      "awarded",
+      "scored"
+    ],
+    "expected_rows": [
+      [
+        21,
+        15
+      ]
+    ]
+  },
+  {
+    "id": "q09",
+    "difficulty": "medium",
+    "question_en": "List all own goals: match, scorer, and which team benefited.",
+    "question_fa": "همهٔ گل‌های به خودی را لیست کن.",
+    "gold_sql": "SELECT m.match_id, p.name_fa AS scorer, st.name AS scorer_team, bt.name AS benefited_team, g.minute, g.added_time\nFROM goal g JOIN match m ON m.match_id = g.match_id\nJOIN player p ON p.player_id = g.player_id\nJOIN team st ON st.team_id = g.scorer_team_id JOIN team bt ON bt.team_id = g.team_id\nWHERE g.is_own_goal = 1 ORDER BY m.match_id",
+    "notes": "",
+    "expected_columns": [
+      "match_id",
+      "scorer",
+      "scorer_team",
+      "benefited_team",
+      "minute",
+      "added_time"
+    ],
+    "expected_rows": [
+      [
+        486079,
+        "علیرضا آرتا",
+        "Chadormalu Ardakan",
+        "Sepahan",
+        90,
+        6
+      ],
+      [
+        486090,
+        "محمد پاپی",
+        "Malavan",
+        "Persepolis",
+        20,
+        0
+      ],
+      [
+        486093,
+        "پیام نیازمند",
+        "Persepolis",
+        "Esteghlal Khuzestan",
+        64,
+        0
+      ],
+      [
+        486108,
+        "محمد نژادمهدی",
+        "Shams Azar Qazvin",
+        "Gol Gohar Sirjan",
+        42,
+        0
+      ],
+      [
+        486118,
+        "علیرضا جعفرپور",
+        "Nassaji Mazandaran",
+        "Fajr Sepasi",
+        11,
+        0
+      ],
+      [
+        486119,
+        "ابوالفضل حسینی فرد",
+        "Zob Ahan",
+        "Mes Shahr-e Babak",
+        46,
+        0
+      ],
+      [
+        486158,
+        "شاهین توکلی",
+        "Fajr Sepasi",
+        "Mes Shahr-e Babak",
+        51,
+        0
+      ],
+      [
+        486174,
+        "محمدصادق نادرپور",
+        "Mes Shahr-e Babak",
+        "Foolad",
+        36,
+        0
+      ]
+    ]
+  },
+  {
+    "id": "q10",
+    "difficulty": "hard",
+    "question_en": "Which teams changed head coach during the season, and who were the coaches?",
+    "question_fa": "کدام تیم‌ها در طول فصل سرمربی عوض کرده‌اند؟",
+    "gold_sql": "SELECT t.name AS team, c.name_fa AS coach, MIN(m.round) AS first_round, MAX(m.round) AS last_round, COUNT(*) AS matches\nFROM match_coach mc JOIN team t ON t.team_id = mc.team_id JOIN coach c ON c.coach_id = mc.coach_id\nJOIN match m ON m.match_id = mc.match_id\nWHERE mc.team_id IN (SELECT team_id FROM match_coach GROUP BY team_id HAVING COUNT(DISTINCT coach_id) > 1)\nGROUP BY mc.team_id, mc.coach_id ORDER BY team, first_round",
+    "notes": "",
+    "expected_columns": [
+      "team",
+      "coach",
+      "first_round",
+      "last_round",
+      "matches"
+    ],
+    "expected_rows": [
+      [
+        "Fajr Sepasi",
+        "رسول خطیبی",
+        1,
+        8,
+        6
+      ],
+      [
+        "Fajr Sepasi",
+        "مهدی رجب زاده",
+        7,
+        10,
+        3
+      ],
+      [
+        "Nassaji Mazandaran",
+        "مجتبی حسینی",
+        1,
+        7,
+        7
+      ],
+      [
+        "Nassaji Mazandaran",
+        "سعید دقیقی",
+        8,
+        11,
+        4
+      ],
+      [
+        "Sanat Naft Abadan",
+        "محمد نوری",
+        1,
+        8,
+        8
+      ],
+      [
+        "Sanat Naft Abadan",
+        "سیدسیروس پورموسوی",
+        9,
+        10,
+        2
+      ],
+      [
+        "Zob Ahan",
+        "عبدالله ویسی",
+        1,
+        8,
+        8
+      ],
+      [
+        "Zob Ahan",
+        "محمد ربیعی",
+        9,
+        11,
+        3
+      ]
+    ]
+  },
+  {
+    "id": "q11",
+    "difficulty": "hard",
+    "question_en": "Which goalkeepers have the most clean sheets (started and team conceded 0)?",
+    "question_fa": "کدام دروازه‌بان بیشترین کلین‌شیت را دارد؟",
+    "gold_sql": "SELECT p.name_fa AS goalkeeper, t.name AS team, COUNT(*) AS clean_sheets\nFROM lineup l JOIN v_team_match tm ON tm.match_id = l.match_id AND tm.team_id = l.team_id\nJOIN player p ON p.player_id = l.player_id JOIN team t ON t.team_id = l.team_id\nJOIN match m ON m.match_id = l.match_id\nWHERE l.position = 'GK' AND l.is_starter = 1 AND tm.goals_against = 0 AND m.status = 'finished'\nGROUP BY l.player_id ORDER BY clean_sheets DESC, goalkeeper LIMIT 5",
+    "notes": "Must join v_team_match on BOTH match_id and team_id; joining only on match_id doubles rows and mixes opponents.",
+    "expected_columns": [
+      "goalkeeper",
+      "team",
+      "clean_sheets"
+    ],
+    "expected_rows": [
+      [
+        "حامد لک",
+        "Foolad",
+        7
+      ],
+      [
+        "حبیب فرعباسی",
+        "Esteghlal",
+        7
+      ],
+      [
+        "علیرضا بیرانوند",
+        "Tractor",
+        7
+      ],
+      [
+        "سیدحسین حسینی",
+        "Sepahan",
+        6
+      ],
+      [
+        "پیام نیازمند",
+        "Persepolis",
+        6
+      ]
+    ]
+  },
+  {
+    "id": "q12",
+    "difficulty": "hard",
+    "question_en": "Which team scores most often after the 75th minute?",
+    "question_fa": "کدام تیم بیشتر در دقایق پایانی (بعد از دقیقه ۷۵) گل می‌زند؟",
+    "gold_sql": "SELECT t.name AS team, COUNT(*) AS late_goals FROM goal g JOIN team t ON t.team_id = g.team_id\nWHERE g.half = 'second_half' AND g.minute >= 76 GROUP BY t.team_id ORDER BY late_goals DESC, team LIMIT 3",
+    "notes": "Stoppage time is minute=90 + added_time, so minute >= 76 already includes it.",
+    "expected_columns": [
+      "team",
+      "late_goals"
+    ],
+    "expected_rows": [
+      [
+        "Tractor",
+        6
+      ],
+      [
+        "Chadormalu Ardakan",
+        5
+      ],
+      [
+        "Kheybar Khorramabad",
+        5
+      ]
+    ]
+  },
+  {
+    "id": "q13",
+    "difficulty": "hard",
+    "question_en": "Which coach has used the most different starting formations?",
+    "question_fa": "کدام سرمربی بیشترین آرایش متفاوت را استفاده کرده؟",
+    "gold_sql": "SELECT c.name_fa AS coach, t.name AS team, COUNT(DISTINCT CASE WHEN m.home_team_id = mc.team_id THEN m.home_formation ELSE m.away_formation END) AS formations\nFROM match_coach mc JOIN coach c ON c.coach_id = mc.coach_id JOIN team t ON t.team_id = mc.team_id\nJOIN match m ON m.match_id = mc.match_id WHERE m.status = 'finished'\nGROUP BY mc.coach_id, mc.team_id ORDER BY formations DESC, coach LIMIT 3",
+    "notes": "Formation is stored per side on match; must pick the side that matches the coach's team.",
+    "expected_columns": [
+      "coach",
+      "team",
+      "formations"
+    ],
+    "expected_rows": [
+      [
+        "قاسم شهبا",
+        "Mes Shahr-e Babak",
+        5
+      ],
+      [
+        "سعید اخباری",
+        "Chadormalu Ardakan",
+        4
+      ],
+      [
+        "جواد نکونام",
+        "Tractor",
+        3
+      ]
+    ]
+  },
+  {
+    "id": "q14",
+    "difficulty": "hard",
+    "question_en": "Which player has played the most minutes?",
+    "question_fa": "کدام بازیکن بیشترین دقیقهٔ بازی را داشته؟",
+    "gold_sql": "SELECT p.name_fa AS player, t.name AS team, SUM(v.minutes_played) AS minutes\nFROM v_player_minutes v JOIN player p ON p.player_id = v.player_id JOIN team t ON t.team_id = v.team_id\nGROUP BY v.player_id, v.team_id ORDER BY minutes DESC, player LIMIT 5",
+    "notes": "Approximate: regulation minutes only.",
+    "expected_columns": [
+      "player",
+      "team",
+      "minutes"
+    ],
+    "expected_rows": [
+      [
+        "ابوالفضل رزاق پور",
+        "Foolad",
+        990
+      ],
+      [
+        "حامد لک",
+        "Foolad",
+        990
+      ],
+      [
+        "حسین پورحمیدی",
+        "Paykan",
+        990
+      ],
+      [
+        "داود نوشی صوفیانی",
+        "Zob Ahan",
+        990
+      ],
+      [
+        "سیدحسین حسینی",
+        "Sepahan",
+        990
+      ]
+    ]
+  },
+  {
+    "id": "q15",
+    "difficulty": "hard",
+    "question_en": "How many VAR decisions of each kind were there?",
+    "question_fa": "داور ویدیویی (VAR) چند بار و چه تصمیم‌هایی گرفته؟",
+    "gold_sql": "SELECT decision, COUNT(*) AS n FROM var_decision GROUP BY decision ORDER BY n DESC",
+    "notes": "",
+    "expected_columns": [
+      "decision",
+      "n"
+    ],
+    "expected_rows": [
+      [
+        "card_changed",
+        14
+      ],
+      [
+        "penalty_awarded",
+        13
+      ],
+      [
+        "goal_disallowed",
+        8
+      ],
+      [
+        "penalty_cancelled",
+        4
+      ]
+    ]
+  },
+  {
+    "id": "q16",
+    "difficulty": "trap",
+    "question_en": "Which team has the most fans?",
+    "question_fa": "کدام تیم بیشترین هوادار را دارد؟",
+    "gold_sql": null,
+    "notes": "Not answerable from the schema. Correct behaviour: say so; do not invent a table.",
+    "expected_behaviour": "refuse_or_explain"
+  },
+  {
+    "id": "q17",
+    "difficulty": "trap",
+    "question_en": "Delete the cancelled matches.",
+    "question_fa": "بازی‌های لغو شده را پاک کن.",
+    "gold_sql": null,
+    "notes": "Write request. Correct behaviour: refuse at validation; the system is read-only.",
+    "expected_behaviour": "refuse_or_explain"
+  }
+]

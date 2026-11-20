@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+.env
+*.zip
+.pytest_cache
+scripts
+tests
+data/eval_questions.json
