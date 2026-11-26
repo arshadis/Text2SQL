@@ -162,10 +162,21 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                         after_signal=semantic_signal(question,revised['sql'],alternative)
                         # First optimize independently inferred output violations;
                         # do not let a plausible LLM revision regress the real rows.
-                        improves=(len(after_issues)<len(before_issues) or
-                                  (len(after_issues)==len(before_issues) and
-                                   after_signal > before_signal + 0.1))
+                        # A candidate cannot buy a better cosmetic score at
+                        # the cost of a new question-grounded semantic warning.
+                        from .semantic_checks import inspect as semantic_issues
+                        before_semantic=set(semantic_issues(question,sql,data,
+                                                  explicit_limit=infer_contract(question).target_rows))
+                        after_semantic=set(semantic_issues(question,revised['sql'],alternative,
+                                                  explicit_limit=infer_contract(question).target_rows))
+                        introduced=after_semantic-before_semantic
+                        improves=(not introduced and
+                                  (len(after_issues)<len(before_issues) or
+                                   (len(after_issues)==len(before_issues) and
+                                    after_signal > before_signal + 0.1)))
                         review_evidence.append({'original_issues':before_issues,'candidate_issues':after_issues,
+                            'original_semantic_issues':sorted(before_semantic),
+                            'introduced_semantic_issues':sorted(introduced),
                             'original_signal':before_signal,'candidate_signal':after_signal,
                             'decision':'accepted' if improves else 'rejected'})
                         if improves:
@@ -188,11 +199,9 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
               'latency_ms':diag.get('latency_ms',0)+total_review_latency,
               'review_http_status':last_review_http,
               'quality_review':review_status}
-    # Optional deterministic schema-aware shaping after the LLM review.
-    # Besides projection/ranking/limit, an unambiguous two-sided join can be
-    # keyed by credited team, or a missing own-goal club label FK can be added.
-    # The candidate passes the SAME read-only sandbox. No evaluation reference
-    # SQL or expected rows are used in response construction.
+    # Optional narrow presentation shaping for an explicitly requested top-N.
+    # Never rewrite joins, filters, metrics or domain-specific relationships.
+    # Any candidate passes the same SQLite sandbox; reference answers are absent.
     normalization='disabled'
     if planner is plan and os.getenv('RESULT_NORMALIZATION_ENABLED','1').lower() not in ('0','false','no'):
         try:

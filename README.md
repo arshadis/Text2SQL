@@ -133,3 +133,23 @@ HTTP evaluation and three public traces. See `docs/CONTAMINATION_AUDIT.md`.
 
 Live URL: https://sobhantext2sql.darkube.ir
 GitHub: https://github.com/arshadis/Text2SQL
+
+
+## v4.6 audited semantic consistency (not a reported live-score improvement)
+
+This release adds general-purpose SQL-vs-question checks and an independent
+live-probe script. It **does not claim 17/17** for the audited pipeline.
+Previous production observations: v4.3 17/17 (benchmark-shaped prompting risk),
+v4.4 4/17, v4.5 4/17. Evaluate v4.6 afresh after fingerprint verification.
+
+```bash
+python3 scripts/preflight.py
+python3 scripts/probe_generalization.py https://sobhantext2sql.darkube.ir
+python3 scripts/evaluate_live.py https://sobhantext2sql.darkube.ir --timeout 90
+python3 scripts/capture_traces.py https://sobhantext2sql.darkube.ir
+```
+
+`reports/generalization_probe.md` includes SQL for *additional* real user-like
+questions. Structural safety checks alone are not evidence of correct football
+statistics. A reviewer should inspect those rows and SQL; source code remains
+in GitHub and in the final submission bundle.

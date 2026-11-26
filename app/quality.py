@@ -40,10 +40,12 @@ def review_feedback(question: str, sql: str, data: dict) -> dict:
     """Share actual SQL/rows and generic guardrails, never a reference solution."""
     hints=[
         'Check relation and column meanings from the supplied schema and semantic dictionary.',
+        'A valid SQL query can still be semantically wrong. Explain whether it answers the precise user metric, subjects, filters, status and output fields.',
         'Check the grain of aggregation and avoid fanout from one-to-many joins.',
         'Preserve user-requested filters, time scope, metrics and any EXPLICIT top-N.',
         'Show readable labels and avoid irrelevant ID columns.',
         'Do not infer a benchmark default ranking size; choose coverage from user intent.',
+        'A request for several entities is not answered by one arbitrarily selected row. Do not force a single leader without singular wording.',
     ]
     if re.search(r'\b(?:played|finished)\b|بازی\s*شده|انجام\s*شده',question,re.I):
         hints.append("For physically played fixtures, status='finished' excludes awarded/scheduled records.")

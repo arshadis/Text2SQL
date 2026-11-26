@@ -27,8 +27,10 @@ class ApiTests(unittest.TestCase):
     def test_meta(self):
         s,b=self.request('GET','/api/meta');self.assertEqual(s,200)
         self.assertEqual((b['teams'],b['players'],b['matches']),(18,531,306))
-        from app.source_fingerprint import pipeline_sha256
+        from app.source_fingerprint import pipeline_sha256, runtime_config_sha256
         self.assertEqual(b.get('pipeline_sha256'),pipeline_sha256())
+        self.assertEqual(b.get('runtime_config_sha256'),runtime_config_sha256())
+        self.assertTrue(b.get('provider_model'))
     def test_write_request_cannot_execute(self):
         s,b=self.request('POST','/api/ask',{'question':'Delete all cancelled matches'})
         self.assertEqual(s,200);self.assertEqual(b['action'],'refuse_write');self.assertIsNone(b['sql'])

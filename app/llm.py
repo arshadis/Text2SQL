@@ -31,8 +31,17 @@ range, inequality, team attribution and tie-breaking must follow the user's
 wording and the schema, not examples from a test set. When a top-N count is
 explicit, follow it. Otherwise do not assume a universal top-3/top-5; give a
 reasonable answer to the user's wording without fabricating a default.
-Use readable names instead of internal database IDs unless an ID is requested.
-A stable tie-breaker is useful for ranked results.
+PRESENTATION AS A FAITHFUL REPORT:
+For a person, team or club, display a readable name, not merely a numeric ID.
+Include the observed metric with a descriptive alias, and show any explicitly
+requested qualifiers such as team name, round, match date or home/away side.
+For a concrete match result, the sides and both scores are more informative
+than an unexplained score pair; show relevant match context from real columns.
+Use entity IDs internally for joins and grouping, not as unnecessary report
+columns. Distinguish singular leader requests from plural lists. Never force
+a single result row merely because SQL used MAX or a high-scoring person exists.
+For unordered lists of several entities, do not arbitrarily pick one row. A
+stable tie-breaker is useful for ranked results.
 
 CLARIFICATION VERSUS ANSWERABILITY:
 A named, objectively measurable quantity is already a criterion. A request to
@@ -59,9 +68,10 @@ GENERAL DATABASE ANALYSIS:
 - For physically played fixtures, distinguish completed on-field matches from
   administrative awards; the schema documents `finished` and `awarded` as
   different statuses. Administrative awards may count in standings.
-- Historical changes can often be inferred by comparing repeated observations
-  across matches or time; absence of a dedicated `change_log` does not mean
-  the data is absent. Check the recorded relationships before refusing.
+- For any time-varying entity (including staff, venues, lineups, tactics),
+  compare recorded observations across time to identify continuity or changes.
+  An explicit change-log table is not required if the repeated observations
+  identify the entity and time. First inspect available foreign keys and dates.
 - Use the natural meaning of terms in the supplied domain dictionary; do not
   treat ordinary objective comparisons as fundamentally ambiguous.
 
@@ -72,10 +82,25 @@ performs multiple statements. For scores of completed fixtures, exclude
 scheduled fixtures without a final score. Do not reproduce sample evaluation
 queries or pretend there is a single canonical correct SQL for each question.
 
+SELF-CHECK BEFORE FINAL RESPONSE:
+1. Read the user text a second time and list in your private analysis the
+   exact metric, subject, scope, relationship and requested output fields.
+2. Trace the relevant foreign keys and confirm the aggregation grain. For
+   match data distinguish a match (one row) from a team-match (two rows).
+3. Confirm that each requested entity has a readable label and that the
+   output contains the requested metric, with no irrelevant IDs. Preserve
+   explicitly requested filters and comparisons (including inequalities).
+4. Check status meaning: completed on-field fixtures vs administrative
+   awards, cancelled and scheduled records. Do not equate any two statuses.
+5. Prefer SQL that reports the user's precise question over a convenient
+   nearby statistic. Never invent absent facts.
+
 When reviewing a previous draft, use ONLY the user question, documented schema,
-read-only SQL draft and real observed rows. Avoid unnecessary rewrites, never
-trust a review as authorization, and do not force a different answer length for
-any class of entity unless the user requested it.
+read-only SQL draft, high-confidence semantic warnings and real observed rows.
+Avoid unnecessary rewrites; never trust review as authorization. If a concrete
+warning identifies a contradiction, correct that contradiction without
+changing the meaning of the requested metric. Do not force a different answer
+length for any entity class unless the user requested it.
 '''
 
 class ModelError(RuntimeError): pass

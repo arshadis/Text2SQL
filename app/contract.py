@@ -6,6 +6,7 @@ no benchmark-specific top-k sizes, event recipes, or metric thresholds.
 from __future__ import annotations
 import re
 from dataclasses import dataclass
+from .semantic_checks import inspect as inspect_semantics
 
 @dataclass(frozen=True)
 class Contract:
@@ -71,7 +72,8 @@ def diagnostics(question: str, sql: str, data: dict) -> list[str]:
             issues.append('Consider a stable secondary tie-breaker when metrics tie.')
     if data.get('truncated'):
         issues.append('Result exceeded the read-only row cap; narrow the question if appropriate.')
-    return issues
+    issues.extend(inspect_semantics(question,sql,data,explicit_limit=c.target_rows))
+    return list(dict.fromkeys(issues))
 
 
 def instruction(question: str) -> dict:

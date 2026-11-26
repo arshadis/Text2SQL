@@ -91,6 +91,9 @@ def main(argv=None):
     fingerprint=meta.get('pipeline_sha256')
     if not isinstance(fingerprint,str) or len(fingerprint)!=64:
         raise SystemExit('No source fingerprint from deployment; deploy the audited code first.')
+    runtime_config=meta.get('runtime_config_sha256')
+    if not isinstance(runtime_config,str) or len(runtime_config)!=64:
+        raise SystemExit('No runtime-config digest; deploy the new code first.')
     result = []
 
     print('Requesting real join trace...')
@@ -142,6 +145,8 @@ def main(argv=None):
     payload = {
         'public_url': base,
         'pipeline_sha256':fingerprint,
+        'runtime_config_sha256':runtime_config,
+        'provider_model':meta.get('provider_model'),
         'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'traces': result,
         'join_attempts': join_attempts,

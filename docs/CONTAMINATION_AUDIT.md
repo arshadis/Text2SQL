@@ -102,3 +102,22 @@ also tries unrelated natural-language JOIN requests for the public trace.
 No 3/5 row defaults, hidden answers, gold SQL, q-number routes or evaluation
 thresholds were reintroduced. The v4.5 public score must be rerun and recorded
 independently; offline tests are NOT evidence of a model accuracy improvement.
+
+## v4.6: question-grounded integrity review (2026-11-26)
+
+The independently deployed v4.5 result was **4/17**, with three genuine public
+traces successfully captured. No score improvement is claimed for v4.6 until
+the edited source is deployed and evaluated against the public URL.
+
+This revision strengthens the generic planner's self-check and adds a small,
+conservative SQL-vs-question consistency module (`app/semantic_checks.py`). It
+flags contradictions observable from the user's own words and the candidate SQL,
+not the evaluator's expected result. The revised candidate is rejected if it
+introduces a new semantic warning merely to improve cosmetic presentation.
+There remain no 3/5 category-based result counts, gold SQL recipes, or question-ID
+routes. A distinct non-eval public smoke probe suite provides additional
+behavioral evidence, but is NOT a scored accuracy benchmark.
+
+Known limitation: neither these checks nor the LLM review can prove semantic
+correctness in general, especially for complex joins or historical inference.
+Independent live tests and manual inspection of real SQL and rows remain necessary.

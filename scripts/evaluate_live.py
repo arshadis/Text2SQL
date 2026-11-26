@@ -96,11 +96,16 @@ def main():
     fingerprint=meta.get('pipeline_sha256')
     if not isinstance(fingerprint,str) or len(fingerprint)!=64:
         raise SystemExit('Deployment has no source fingerprint: deploy the audited code before evaluation.')
+    runtime_config=meta.get('runtime_config_sha256')
+    if not isinstance(runtime_config,str) or len(runtime_config)!=64:
+        raise SystemExit('Missing public runtime-config digest; deploy the new version before evaluating.')
     reports=[]
     out=ROOT/'reports'
     stamp=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     def document(status):
         return {'url':base,'generated_at':stamp,'status':status,'pipeline_sha256':fingerprint,
+                'runtime_config_sha256':runtime_config,
+                'provider_model':meta.get('provider_model'),
                 'full_run':full_run,'completed':len(reports),
                 'passed':sum(x['pass'] for x in reports),'total':len(cases),
                 'results':reports}

@@ -39,6 +39,11 @@ def main():
         fingerprint=record.get('pipeline_sha256')
         if fingerprint!=local_fingerprint:
             p.error(f'{label} was not generated from this audited code version. Redeploy and rerun public evaluation AND traces. Expected pipeline_sha256={local_fingerprint}; observed={fingerprint}')
+    config_eval=evaluation.get('runtime_config_sha256')
+    config_traces=traces.get('runtime_config_sha256')
+    if (not isinstance(config_eval,str) or len(config_eval)!=64 or
+            config_eval != config_traces):
+        p.error('Live evaluation and traces must use the SAME runtime model/configuration; rerun both after deployment.')
     if evaluation.get('total')!=17 or len(evaluation.get('results',[]))!=17:
         p.error('Expected evaluation for ALL 17 questions')
     expected={'good_join','refusal','clarification'}
@@ -63,6 +68,7 @@ def main():
 Status: **{status}**
 
 - Audited pipeline fingerprint: `{local_fingerprint}`
+- Runtime model/config fingerprint: `{config_eval}`; model: `{evaluation.get('provider_model')}`
 - Public Hamravesh URL: {url}
 - GitHub source: {opt.repo or '(add your repository link before submission)'}
 - Evaluation results: **{passed}/17**, generated from live HTTP responses; see `eval_report.json`.
@@ -80,6 +86,7 @@ Open the public URL, ask a football question in Persian or English, and inspect 
 `traces.json` / `traces.md`: good join, refusal, clarification from public HTTP.
 `schema.sql` / `semantic_model.md`: independent schema and domain mapping.
 `ARCHITECTURE.md` / `DEPLOYMENT.md`: design and deployment instructions.
+`generalization_probe.{json,md}` (if present): independent live-use smoke probes; structural checks, not validated factual accuracy.
 
 ## Caveats
 ''' + ('- '+ '\n- '.join(problems)+'\n' if problems else '- No known eval or trace failures in the attached run; availability beyond the test period is not guaranteed.\n')
@@ -97,6 +104,21 @@ Open the public URL, ask a football question in Persian or English, and inspect 
     if archived.is_dir():
         mapping += [(p.relative_to(ROOT).as_posix(),p.read_bytes()) for p in sorted(archived.iterdir()) if p.is_file()]
     if (ROOT/'Dockerfile').exists():mapping.append(('Dockerfile',(ROOT/'Dockerfile').read_bytes()))
+    # Optional independent user-like probes are evidence, not a second accuracy
+    # score. Never mix reports from a different deployed code fingerprint.
+    independent=ROOT/'reports'/'generalization_probe.json'
+    companion=ROOT/'reports'/'generalization_probe.md'
+    if independent.exists() and companion.exists():
+        probe=json.loads(independent.read_text(encoding='utf8'))
+        if (probe.get('public_url','').rstrip('/')==url and
+                probe.get('pipeline_sha256')==local_fingerprint and
+                probe.get('runtime_config_sha256')==config_eval):
+            mapping += [('generalization_probe.json',independent.read_bytes()),
+                        ('generalization_probe.md',companion.read_bytes())]
+        else:
+            print('Warning: independent probe is from another deployment; leaving it out of the bundle.')
+    for optional_doc in ('RELEASE_V46_FA.md',):
+        if (ROOT/optional_doc).is_file(): mapping.append((optional_doc,(ROOT/optional_doc).read_bytes()))
     screenshot_dir=ROOT/'reports'/'screenshots'
     if screenshot_dir.is_dir():
         mapping += [('screenshots/'+p.name,p.read_bytes()) for p in sorted(screenshot_dir.iterdir())
