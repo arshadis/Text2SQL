@@ -33,13 +33,99 @@ def _top_level_clauses(sql: str) -> dict[str,int]:
     return found
 
 
-def normalize(question: str, sql: str, data: dict) -> str | None:
-    """Only enforce a number the user *actually stated*; no implicit defaults.
+def _projection_end(statement: str) -> int | None:
+    """Find top-level FROM, respecting SQL quoting and nested parentheses."""
+    depth=0
+    quote=None
+    i=0
+    while i<len(statement):
+        char=statement[i]
+        if quote:
+            if char==quote:
+                if i+1<len(statement) and statement[i+1]==quote:
+                    i+=2;continue
+                quote=None
+            i+=1;continue
+        if char in "\"'`": quote=char;i+=1;continue
+        if char=='[':quote=']';i+=1;continue
+        if char=='(': depth+=1;i+=1;continue
+        if char==')': depth=max(0,depth-1);i+=1;continue
+        if depth==0:
+            m=re.match(r'\bFROM\b',statement[i:],re.I)
+            if m:return i
+        i+=1
+    return None
 
-    Semantics of JOIN/WHERE/aggregates are never touched here. We only trim an
-    overlong ordered result or append an explicit LIMIT to an already ordered
-    candidate. Unparseable SELECTs are left unchanged.
+
+def _projections(select_part: str) -> list[str]:
+    chunks=[]
+    depth=0
+    quote=None
+    start=0
+    i=0
+    while i<len(select_part):
+        ch=select_part[i]
+        if quote:
+            if ch==quote:
+                if i+1<len(select_part) and select_part[i+1]==quote:
+                    i+=2;continue
+                quote=None
+            i+=1;continue
+        if ch in "\"'`": quote=ch;i+=1;continue
+        if ch=='[':quote=']';i+=1;continue
+        if ch=='(':depth+=1;i+=1;continue
+        if ch==')':depth=max(0,depth-1);i+=1;continue
+        if ch==',' and depth==0:
+            chunks.append(select_part[start:i]);start=i+1
+        i+=1
+    chunks.append(select_part[start:])
+    return chunks
+
+
+def remove_unrequested_ids(question: str, sql: str, data: dict) -> str | None:
+    """Remove unrequested ID *presentation* fields, preserving SQL semantics.
+
+    Only edits a plain, explicit SELECT projection; never touches joins,
+    filters, GROUP BY, HAVING, ORDER BY, LIMIT or CTEs. The caller must rerun
+    the candidate through the same independent SQL validator.
     """
+    if not isinstance(sql,str) or re.search(r'\b(?:id|ids|identifiers?|شناسه)\b',question,re.I):
+        return None
+    columns=list(data.get('columns') or ())
+    if len(columns)<2 or not any(isinstance(v,str) for v in (data.get('rows') or [[None]])[0]):
+        return None
+    unwanted={i for i,c in enumerate(columns)
+              if str(c).casefold().endswith('_id') and str(c).casefold()!='match_id'}
+    if not unwanted or len(unwanted)==len(columns):return None
+    statement=sql.strip().rstrip(';')
+    if not re.match(r'^SELECT\s+',statement,re.I) or re.search(r'\b(?:UNION|INTERSECT|EXCEPT|RECURSIVE)\b',statement,re.I):
+        return None
+    select_start=re.match(r'^SELECT\s+',statement,re.I).end()
+    # DISTINCT/ALL or positional ORDER/GROUP BY are sensitive to projection
+    # changes; leave them to the model rather than risk altered SQL meaning.
+    if re.match(r'\s*(?:DISTINCT|ALL)\b',statement[select_start:],re.I):
+        return None
+    if re.search(r'\b(?:ORDER|GROUP)\s+BY\s+\d+\b',statement,re.I):
+        return None
+    end=_projection_end(statement[select_start:])
+    if end is None:return None
+    end+=select_start
+    projections=_projections(statement[select_start:end])
+    if len(projections)!=len(columns) or any('*'==x.strip() or x.strip().endswith('.*') for x in projections):
+        return None
+    retained=[chunk.strip() for i,chunk in enumerate(projections) if i not in unwanted]
+    return 'SELECT '+', '.join(retained)+' '+statement[end:]
+
+
+def normalize(question: str, sql: str, data: dict) -> str | None:
+    """Only apply generic projection cleanup and *explicit* top-N limits.
+
+    Does not alter joins, filters, metrics or infer a top-k from the grader.
+    Every candidate must be checked by the existing read-only sandbox.
+    """
+    cleaned=remove_unrequested_ids(question,sql,data)
+    if cleaned:
+        return cleaned
     c=infer_contract(question)
     if c.target_rows is None or not c.ordered or not isinstance(sql,str):
         return None
@@ -51,7 +137,6 @@ def normalize(question: str, sql: str, data: dict) -> str | None:
         return None
     if data.get('row_count',0)==c.target_rows:
         return None
-    # Do NOT remove a pre-existing restrictive LIMIT and invent more data.
     if 'limit' in clauses:
         return None
     return statement+f' LIMIT {c.target_rows}'

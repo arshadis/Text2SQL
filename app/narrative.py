@@ -45,7 +45,7 @@ def summarize(data: dict) -> str:
     # A single aggregate or multi-field match: expose observed labels + values.
     first=rows[0]
     if len(first)==len(columns):
-        details=', '.join(f'{col.replace("_"," ")}: {_fa(val)}'
+        details=', '.join(f'{_TERMS.get(col.casefold(), col.replace("_"," "))}: {_fa(val)}'
                           for col,val in list(zip(columns,first))[:6])
         suffix=(f'؛ در مجموع {_fa(count)} ردیف ثبت شده است.' if count>1 else '.')
         return f'طبق داده‌های ثبت‌شده، {details}{suffix}'

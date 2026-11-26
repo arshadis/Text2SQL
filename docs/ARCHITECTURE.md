@@ -29,17 +29,28 @@ from the current question. It checks display IDs, missing readable labels and
 unstable ranking order without target-answer lookups.
 
 `app/normalizer.py` is intentionally narrow. It can append an explicitly
-requested LIMIT to a simple ordered SELECT, but no longer injects joins,
-category filters, fixed 3/5 row counts or special event projections.
+requested LIMIT to a simple ordered SELECT. It can also remove unrequested
+numeric IDs from a simple explicit SELECT projection while preserving all
+joins, filters, groupings, ordering and other expressions. The rewritten SQL
+is revalidated and only accepted if its retained result cells and order match
+exactly. It never injects domain-specific joins, category filters, fixed 3/5
+row counts or special event recipes.
 
 `app/semantic_checks.py` flags only high-confidence mismatches between an
 explicit user request and a SQL candidate (two-sided match-view row inflation,
 physically played vs administratively awarded records, forced `LIMIT 1` for
 an all-record request, unrequested internal identifiers, and explicit N
-mismatches). These hints are incomplete and do not prove the query is correct.
+mismatches). v4.7 also checks several observable role/temporal mistakes:
+NULL match scores in results, global rather than venue-scoped points, falsely
+attributed clean sheets, own-goal beneficiary role, and LEFT JOIN filtering
+on its nullable side. These are conservative warnings based on question and
+observed rows, never benchmark-specific transformations. These hints are incomplete and do not prove the query is correct.
 They are derived from wording plus SQL, **not** from evaluator cases, gold SQL,
 expected rows or hard-coded leaderboard sizes. A revision introducing new
 semantic warnings cannot be accepted for cosmetic improvements alone.
+
+Review evidence now includes **original and candidate SQL** plus the observed
+columns, row counts, signals and acceptance decision for public audit.
 
 `app/quality.py` reviews the draft and observed rows using generic feedback
 only. The LLM review can be unavailable or wrong; each proposed candidate
@@ -72,8 +83,11 @@ evaluation and trace capture each record it. Packaging rejects stale reports
 whose fingerprint differs from the current source, guarding against falsely
 calling a previous 17/17 result a score for newly altered code.
 
-The original, before-audit public run had **17/17**. The audited version's real
-score must be recorded from a *new* public run, without assuming any outcome.
+The original, before-audit public run had **17/17**, but used benchmark-shaped
+prompt guidance. The v4.6 audited run had **5/17** and the non-benchmark
+probes had six of six analytical responses independently checked against the
+DB. The v4.7 score requires a *new* public deployment/run and is not yet known.
+See `V46_DIAGNOSTIC_AUDIT_FA.md`.
 
 ## UI and deployment
 
@@ -106,3 +120,9 @@ runtime switches. `evaluate_live.py`, `capture_traces.py` and the optional
 non-eval probes record these alongside the source fingerprint. Final packaging
 rejects an evaluation and trace captured from different model/config settings.
 The secret API key is never included in the hash or public response.
+
+
+Independent value-level verification of six **non-evaluator** live probes is
+provided by `scripts/verify_probe_semantics.py`. It runs independent audit SQL
+locally only after the response is captured; its SQL is not imported by the
+server, and six matches do not establish an overall success rate.

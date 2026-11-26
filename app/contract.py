@@ -58,7 +58,9 @@ def diagnostics(question: str, sql: str, data: dict) -> list[str]:
         issues.append(f'User explicitly requested at most {c.target_rows} entries; got {row_count}.')
     if c.target_rows is not None and row_count==0 and rows==[]:
         issues.append('The request yielded zero rows. Verify that joins and filters reflect the question.')
-    if c.show_names and not re.search(r'\b(?:id|identifier|شناسه)\b',question.casefold()):
+    scalar_metric=(len(columns)==1 and rows and len(rows[0])==1
+                   and isinstance(rows[0][0],(int,float)))
+    if c.show_names and not scalar_metric and not re.search(r'\b(?:id|identifier|شناسه)\b',question.casefold()):
         ids=[name for name in columns if name.endswith('_id') and name!='match_id']
         if ids:
             issues.append('Prefer readable entity labels to internal IDs: '+', '.join(ids))

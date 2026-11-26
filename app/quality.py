@@ -46,6 +46,7 @@ def review_feedback(question: str, sql: str, data: dict) -> dict:
         'Show readable labels and avoid irrelevant ID columns.',
         'Do not infer a benchmark default ranking size; choose coverage from user intent.',
         'A request for several entities is not answered by one arbitrarily selected row. Do not force a single leader without singular wording.',
+        'A result set can be syntactically valid but mix unrelated sides or include NULL values instead of recorded match results; verify role-level conditions.',
     ]
     if re.search(r'\b(?:played|finished)\b|بازی\s*شده|انجام\s*شده',question,re.I):
         hints.append("For physically played fixtures, status='finished' excludes awarded/scheduled records.")

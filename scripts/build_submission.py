@@ -94,7 +94,7 @@ Open the public URL, ask a football question in Persian or English, and inspect 
     mapping=[('README.md',readme.encode('utf8'))]
     mapping += [(name,(ROOT/'reports'/name).read_bytes()) for name in ('eval_report.json','eval_report.md','traces.json','traces.md')]
     mapping += [(name,(ROOT/'data'/name).read_bytes()) for name in ('schema.sql','semantic_model.md')]
-    mapping += [(name,(ROOT/'docs'/name).read_bytes()) for name in ('ARCHITECTURE.md','DEPLOYMENT.md','CONTAMINATION_AUDIT.md')]
+    mapping += [(name,(ROOT/'docs'/name).read_bytes()) for name in ('ARCHITECTURE.md','DEPLOYMENT.md','CONTAMINATION_AUDIT.md','V46_DIAGNOSTIC_AUDIT_FA.md')]
     # Reviewer can inspect the complete production inference path. No code is hidden.
     mapping += [(path.relative_to(ROOT).as_posix(),path.read_bytes())
                 for folder in ('app','scripts','tests')
@@ -117,7 +117,7 @@ Open the public URL, ask a football question in Persian or English, and inspect 
                         ('generalization_probe.md',companion.read_bytes())]
         else:
             print('Warning: independent probe is from another deployment; leaving it out of the bundle.')
-    for optional_doc in ('RELEASE_V46_FA.md',):
+    for optional_doc in ('RELEASE_V46_FA.md','RELEASE_V47_FA.md'):
         if (ROOT/optional_doc).is_file(): mapping.append((optional_doc,(ROOT/optional_doc).read_bytes()))
     screenshot_dir=ROOT/'reports'/'screenshots'
     if screenshot_dir.is_dir():

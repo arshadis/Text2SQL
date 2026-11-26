@@ -153,3 +153,15 @@ python3 scripts/capture_traces.py https://sobhantext2sql.darkube.ir
 questions. Structural safety checks alone are not evidence of correct football
 statistics. A reviewer should inspect those rows and SQL; source code remains
 in GitHub and in the final submission bundle.
+
+
+## Audited v4.7 (evidence-grounded)
+
+The v4.6 production run passed **5/17** on the strict published evaluator.
+A post-hoc cross-check of six unrelated analytical smoke queries against
+independent database queries matched all six results. See
+`docs/V46_DIAGNOSTIC_AUDIT_FA.md` and `RELEASE_V47_FA.md` for precise evidence.
+The next v4.7 release adds conservative role/status consistency warnings,
+verifiable presentation-only ID projection cleanup, and original/candidate
+SQL in public review evidence. **No v4.7 live score is claimed**; rebuild,
+verify the source/config hashes, and run a new public evaluation.

@@ -121,3 +121,17 @@ behavioral evidence, but is NOT a scored accuracy benchmark.
 Known limitation: neither these checks nor the LLM review can prove semantic
 correctness in general, especially for complex joins or historical inference.
 Independent live tests and manual inspection of real SQL and rows remain necessary.
+
+## v4.7 — evidence-grounded review without benchmark recipes
+
+An independent audit of v4.6's complete public reports verified the package
+fingerprint matches the running source. The observed score was **5/17**.
+Several failures are genuinely semantic (venue-specific points, own-goal club
+roles, null future results, goalkeeper-side clean sheets); others reflect
+underspecified ranking lengths in the reference evaluator. Six distinct
+non-eval analytical probes were separately reproduced against the DB and matched.
+
+The new checks are observable SQL-vs-question invariants, not stored reference
+solutions. No question IDs, reference SQL or inferred 3/5 ranking defaults are
+used in production. Review evidence now retains both original and revised SQL.
+A v4.7 public score is **not** known until the matching deployment is evaluated.

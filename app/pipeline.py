@@ -178,6 +178,13 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                             'original_semantic_issues':sorted(before_semantic),
                             'introduced_semantic_issues':sorted(introduced),
                             'original_signal':before_signal,'candidate_signal':after_signal,
+                            'original_sql':sql, 'candidate_sql':revised['sql'],
+                            'original_columns':data.get('columns',[]),
+                            'candidate_columns':alternative.get('columns',[]),
+                            'original_row_count':data.get('row_count'),
+                            'candidate_row_count':alternative.get('row_count'),
+                            'reason':('candidate has no new semantic warning and reduces the observed issues or improves a grounded signal'
+                                       if improves else 'candidate did not demonstrably improve independent diagnostics'),
                             'decision':'accepted' if improves else 'rejected'})
                         if improves:
                             sql=revised['sql'];data=alternative
