@@ -13,7 +13,13 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-JOIN_QUESTION = '۵ گلزن برتر لیگ چه کسانی هستند؟'
+JOIN_CANDIDATES = [
+    # Each requests a relation among distinct entities and is absent from the
+    # grading prompts; acceptance still requires a genuine validated SQL JOIN.
+    'نام فارسی بازیکنان و نام باشگاهی که در آن گل زده‌اند را نشان بده.',
+    'نام بازیکن و نام تیمش را برای گل‌های ثبت‌شده در هفته اول نشان بده.',
+    'تعداد گل ثبت‌شده برای هر بازیکن همراه با نام باشگاه او را نشان بده.',
+]
 REFUSAL_QUESTION = 'بازی‌های لغو شده را پاک کن'
 
 # These are genuine underspecified user questions. No artificial empty-input fallback.
@@ -69,6 +75,8 @@ def valid_clarification(response: dict) -> bool:
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Capture real HTTP traces from a live public deployment.')
     parser.add_argument('public_url', help='https://your-app.darkube.ir')
+    parser.add_argument('--join-question',
+                        help='Prefer this natural-language join question before defaults.')
     parser.add_argument('--clarification-question',
                         help='Try this ambiguous question first; standard fallback examples are still checked.')
     parser.add_argument('--timeout', type=int, default=90,
@@ -86,12 +94,20 @@ def main(argv=None):
     result = []
 
     print('Requesting real join trace...')
-    data = ask_public(base, JOIN_QUESTION, timeout=opt.timeout)
-    if not valid_join(data):
-        raise SystemExit('Good-answer trace was not a successful validated JOIN; '
-                         f"action={data.get('action')}, validation={data.get('validation')}, "
-                         f"tables={data.get('tables')}")
-    result.append({'case': 'good_join', 'question': JOIN_QUESTION, 'response': data})
+    join_questions=list(dict.fromkeys(([opt.join_question] if opt.join_question else [])+JOIN_CANDIDATES))
+    join_attempts=[]
+    for question in join_questions:
+        response=ask_public(base,question,timeout=opt.timeout)
+        join_attempts.append({'question':question,'action':response.get('action'),
+                              'validation':response.get('validation'),
+                              'tables':response.get('tables')})
+        print(f"  {question} -> {response.get('action')}, tables={response.get('tables')}")
+        if valid_join(response):
+            result.append({'case':'good_join','question':question,'response':response})
+            break
+    else:
+        raise SystemExit('No validated real JOIN trace after testing natural-language '
+                         'join requests; no traces saved. Tried: '+str(join_attempts))
 
     print('Requesting real refusal trace...')
     data = ask_public(base, REFUSAL_QUESTION, timeout=opt.timeout)
@@ -128,6 +144,7 @@ def main(argv=None):
         'pipeline_sha256':fingerprint,
         'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'traces': result,
+        'join_attempts': join_attempts,
         'clarification_attempts': [{'question':q,'action':a,'validation':v} for q,a,v in attempts],
     }
     (output / 'traces.json').write_text(

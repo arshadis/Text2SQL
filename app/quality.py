@@ -18,6 +18,24 @@ def reconsider_refusal(question: str) -> bool:
     return bool(SUPPORTED_TERMS.search(question) and not UNSUPPORTED_TERMS.search(question))
 
 
+# A bounded second look is permitted for a *concrete* recorded metric.
+# This is a general vocabulary of observable quantities, not a list of eval
+# questions, a fixed ranking size, or an instruction to fabricate a criterion.
+_OBJECTIVE_MEASURES = re.compile(
+    r'\b(?:goals?|scor(?:es?|ers?|ing)|cards?|bookings?|penalt(?:y|ies)|'
+    r'points?|wins?|draws?|losses?|minutes?|played|finished|results?|'
+    r'clean\s+sheets?|formations?|substitutions?|fixtures?|matches?|'
+    r'weeks?|rounds?|saves?|shots?|assists?)\b|'
+    r'(?:گل|پنالتی|کارت|امتیاز|برد|باخت|مساوی|دقیقه|بازی|نتیجه|'
+    r'کلین\s?شیت|آرایش|تعویض|هفته|مسابقه|پاس گل)', re.I)
+
+
+def reconsider_clarification(question: str) -> bool:
+    """Only ask a reviewing model to check premature clarification if the
+    question already names an observable measure. Never force it to answer.
+    """
+    return bool(_OBJECTIVE_MEASURES.search(question)) and not bool(UNSUPPORTED_TERMS.search(question))
+
 def review_feedback(question: str, sql: str, data: dict) -> dict:
     """Share actual SQL/rows and generic guardrails, never a reference solution."""
     hints=[

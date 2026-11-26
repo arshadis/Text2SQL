@@ -85,3 +85,20 @@ preflight. The historical tests are retained for transparent comparison.
   under `reports/screenshots/` to include them in the final submission bundle.
 - SQL accuracy outside the published 17-question set remains a matter for
   additional unseen questions and adversarial tests.
+
+## Measured v4.4 regression and v4.5 mitigation (2026-11-26)
+
+The audited v4.4 build was independently evaluated against the public URL
+with a matching `pipeline_sha256`. Its **observed score is 4/17**. The first
+public good-JOIN trace failed because the model asked for clarification on a
+concrete request. This evidence is not overwritten or represented as a pass.
+
+v4.5 adds an abstract answerability guideline, explaining the distinction
+between objective measurable quantities and truly missing criteria. It permits
+a single bounded second planning attempt when a concrete metric was named but
+clarification was requested. Any resulting SQL uses the same sandbox. It
+also tries unrelated natural-language JOIN requests for the public trace.
+
+No 3/5 row defaults, hidden answers, gold SQL, q-number routes or evaluation
+thresholds were reintroduced. The v4.5 public score must be rerun and recorded
+independently; offline tests are NOT evidence of a model accuracy improvement.

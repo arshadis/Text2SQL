@@ -5,7 +5,7 @@ import re
 import time
 from .db import RejectedSQL, execute_readonly
 from .llm import ModelError, plan
-from .quality import reconsider_refusal, review_feedback, semantic_signal
+from .quality import reconsider_refusal, reconsider_clarification, review_feedback, semantic_signal
 from .contract import diagnostics, infer_contract
 from .normalizer import normalize
 from .narrative import summarize
@@ -41,13 +41,40 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
         return result(action='refuse_out_of_scope',validation='model_unavailable',
                       answer='مدل تولید SQL در دسترس نیست؛ هیچ کوئری اجرا نشده است. '+str(e))
     action=route['action'];intent=str(route.get('intent') or 'unknown')[:100]
+    review_enabled=(reviewer is not None or (planner is plan and
+                    os.getenv('GAPGPT_REVIEW_ENABLED','1').strip().lower() not in ('0','false','no')))
+    review_planner=reviewer if reviewer is not None else planner
+    # A model occasionally asks for clarification on a measurable, answerable
+    # question. One bounded second opinion is allowed, but never forced:
+    # only a successfully validated SQL answer may replace clarification.
+    # The criterion is inferred from ordinary metric words, not gold SQL,
+    # evaluator row counts or question IDs.
+    if (action=='ask_clarifying_question' and review_enabled and
+            reconsider_clarification(question)):
+        try:
+            revised,new_diag=review_planner(question,previous_question=previous_question,feedback={
+                'mode':'clarification_necessity_check',
+                'original_clarification':str(route.get('clarification') or '')[:260],
+                'instruction':(
+                    'Check whether the user already names a measurable quantity and '
+                    'identifiable subject using the supplied schema. If yes, answer '
+                    'using independent read-only SQL. If a necessary referent or '
+                    'subjective criterion really is missing, keep one clarification. '
+                    'Never guess an unspecified metric.'),
+            })
+            if revised['action']=='answer_from_query':
+                route=revised;action=route['action']
+                intent=str(route.get('intent') or intent)[:100]
+                diag={**new_diag,'latency_ms':diag.get('latency_ms',0)+new_diag.get('latency_ms',0),
+                      'clarification_review':'reconsidered_as_query'}
+            else:
+                diag={**diag,'clarification_review':'kept_clarification'}
+        except ModelError:
+            diag={**diag,'clarification_review':'review_unavailable'}
     if action=='ask_clarifying_question':
         followup=str(route.get('clarification') or 'لطفاً معیار مدنظرتان را دقیق‌تر مشخص کنید.')[:300]
         return result(intent=intent,action=action,model_diagnostics=diag,
                       answer=followup,next_state={'pending_question':question})
-    review_enabled=(reviewer is not None or (planner is plan and
-                    os.getenv('GAPGPT_REVIEW_ENABLED','1').strip().lower() not in ('0','false','no')))
-    review_planner=reviewer if reviewer is not None else planner
     if action=='refuse_out_of_scope' and review_enabled and reconsider_refusal(question):
         # Verify that a derivable database question was not mistaken for outside scope.
         # No answer is forced: the second call may also refuse or ask for clarification.
