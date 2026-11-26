@@ -8,6 +8,7 @@ from .llm import ModelError, plan
 from .quality import reconsider_refusal, review_feedback, semantic_signal
 from .contract import diagnostics, infer_contract
 from .normalizer import normalize
+from .narrative import summarize
 
 WRITE_CUES = re.compile(r'\b(?:delete|drop|truncate|update|insert|alter|create|remove\s+from|wipe|erase)\b|(?:حذف\s*کن|پاک\s*کن|پاک\s*کردن|ویرایش\s*کن|اضافه\s*کن|تغییر\s*بده|بازی\s*ها\s*را\s*پاک)',re.I)
 
@@ -20,7 +21,7 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
           'validation':'not_run','dry_run':'not_run','row_count':0,'rows':[],'columns':[],
           'tables':[],'fields':[],'execution_ms':0,'model_diagnostics':None,
           'answer':'','next_state':None,'database_executed':False,
-          'quality_review':'not_run','semantic_warnings':[], 'result_normalization':'not_run'}
+          'quality_review':'not_run','review_evidence':[],'semantic_warnings':[], 'result_normalization':'not_run'}
     def result(**values):
         out={**base,**values};out['total_latency_ms']=round((time.monotonic()-start)*1000);return out
     if not question or len(question)>700:
@@ -100,6 +101,7 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                       validation='rejected',model_diagnostics=diag,
                       answer='SQL پیشنهادی تأیید نشد و اجرا نشد: '+str(last_rejection)[:180])
     review_status='disabled' if not review_enabled else 'not_run'
+    review_evidence=[]
     if review_enabled:
         # ALL candidates, including a second or third model answer, are executed only
         # after the same independent read-only SQL sandbox validation. Ranking and
@@ -136,6 +138,9 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                         improves=(len(after_issues)<len(before_issues) or
                                   (len(after_issues)==len(before_issues) and
                                    after_signal > before_signal + 0.1))
+                        review_evidence.append({'original_issues':before_issues,'candidate_issues':after_issues,
+                            'original_signal':before_signal,'candidate_signal':after_signal,
+                            'decision':'accepted' if improves else 'rejected'})
                         if improves:
                             sql=revised['sql'];data=alternative
                             review_status='adopted'
@@ -180,11 +185,9 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
             normalization='rejected_by_sandbox'
     count=data['row_count']
     # The presentation never invents factual data; the table of rows is the answer.
-    summary=('این پرسش در دیتابیس نتیجه‌ای نداشت؛ اطلاعاتی حدس زده نشد.' if not count else
-             f'نتیجه بر اساس {count} ردیف بازگشتی از دیتابیس نمایش داده شده است.' +
-             (' (خروجی به سقف ۱۰۰ ردیف محدود شده است.)' if data['truncated'] else ''))
+    summary=summarize(data)
     return result(intent=intent,action='answer_from_query',sql=sql,
                   model_diagnostics=diag,quality_review=review_status,
-                  semantic_warnings=diagnostics(question,sql,data),
+                  semantic_warnings=diagnostics(question,sql,data),review_evidence=review_evidence,
                   result_normalization=normalization,answer=summary,
                   database_executed=True,**data)

@@ -52,7 +52,7 @@ python scripts/evaluate_live.py https://YOUR-APP.darkube.ir
 python scripts/capture_traces.py https://YOUR-APP.darkube.ir
 ```
 
-خروجی‌ها زیر `reports/` ذخیره می‌شوند. گزارش ارزیابی برای هر سؤال PASS/FAIL و علت را ثبت می‌کند. سؤالات تله ۱۶ و ۱۷ تنها در صورت امتناع بدون اجرای SQL قبول هستند. ستون‌های داده می‌توانند نام‌های متفاوت داشته باشند؛ ردیف‌ها مبنای مقایسه‌اند. **هیچ امتیاز زنده یا موفقیت ۱۷/۱۷ هنوز ادعا نشده است.**
+خروجی‌ها زیر `reports/` ذخیره می‌شوند. گزارش ارزیابی برای هر سؤال PASS/FAIL و علت را ثبت می‌کند. سؤالات تله ۱۶ و ۱۷ تنها در صورت امتناع بدون اجرای SQL قبول هستند. ستون‌های داده می‌توانند نام‌های متفاوت داشته باشند؛ ردیف‌ها مبنای مقایسه‌اند. **امتیاز ۱۷/۱۷ عمومی ثبت‌شده متعلق به نسخه پیش از ممیزی است؛ نسخه پاک‌سازی‌شده باید دوباره ارزیابی شود.**
 
 ## نکات مهم برای ادامه
 
@@ -82,9 +82,13 @@ python scripts/preflight.py --live
 python -m app.server
 ```
 
-**Important:** The application has not been deployed yet for Assignment 2, and a live 17-question GapGPT evaluation has not been run on behalf of the student. The final public address, live evaluation results, and live traces must come from their deployed Hamravesh instance. The system does not need any third-party Python packages to run.
+**Audit note (2026-11-26):** The previous public version passed 17/17 and captured 3 public traces. That earlier result is NOT evidence that the benchmark-decontaminated source in this revision also passes. See `docs/CONTAMINATION_AUDIT.md`, redeploy, compare `/api/meta.pipeline_sha256` to the local fingerprint, and run the live evaluation again. The server requires only Python standard library. The final ZIP includes runtime source for inspection.
 
-## Semantic quality review (updated build)
+## Historical release notes: pre-audit v3/v4 (NOT current design)
+
+این بخش‌ها برای شفافیت و ردگیری تغییرات آرشیو شده‌اند؛ توصیف معماری نسخه ممیزی‌شده نیستند. متن مرجع انتشار فعلی در `docs/ARCHITECTURE.md` و `docs/CONTAMINATION_AUDIT.md` است.
+
+### Semantic quality review (historical build)
 
 After a safe query executes, the app can ask GapGPT for up to **two** independent semantic checks when contract warnings persist grounded in the original question, draft SQL, and up to four real returned rows. If the reviewer proposes a correction, the SQL must pass the same SQLite allowlist, EXPLAIN/dry-run and read-only authorizer. A mistaken refusal about schema-supported concepts may be reconsidered once. Reference answers remain isolated from the production path.
 
@@ -95,7 +99,7 @@ After a safe query executes, the app can ask GapGPT for up to **two** independen
 This update passed **54 offline tests**; it has **not** been rescored using the live provider. The first observed user evaluation was 4/17 and v3 reached 5/17; retest using `python3 scripts/evaluate_live.py http://localhost:3000`. See `PATCH_NOTES_FA.md` for WSL installation.
 
 
-## v4 — safe result contract normalization
+### v4 — safe result contract normalization (historical)
 
 The latest code adds a **question-derived result contract**, more targeted
 semantic feedback, a bounded second repair/review attempt, and a transparent
@@ -118,3 +122,14 @@ is counted via a two-row-per-match view, and for incomplete own-goal role labels
 The bounded normalizer can align a simple FK join or fill the missing scorer
 club from the same DB, always rechecking the resulting SQL in the read-only
 sandbox. See `PATCH_V42_FA.md` for WSL upgrade and focused live tests.
+
+
+## Independent prompt audit / public re-evaluation (2026-11-26)
+
+This project previously contained evaluation-shaped prompt recipes. They are
+removed in the audited revision. Old 17/17 live results remain historical only.
+The package builder requires a matching `pipeline_sha256` from freshly deployed
+HTTP evaluation and three public traces. See `docs/CONTAMINATION_AUDIT.md`.
+
+Live URL: https://sobhantext2sql.darkube.ir
+GitHub: https://github.com/arshadis/Text2SQL

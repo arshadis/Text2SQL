@@ -12,6 +12,9 @@ from urllib.parse import urlparse
 from zipfile import ZipFile,ZIP_DEFLATED
 
 ROOT=Path(__file__).resolve().parents[1]
+import sys
+sys.path.insert(0,str(ROOT))
+from app.source_fingerprint import pipeline_sha256
 
 
 def main():
@@ -31,6 +34,11 @@ def main():
     traces=json.loads(paths[2].read_text(encoding='utf8'))
     if evaluation.get('url','').rstrip('/')!=url or traces.get('public_url','').rstrip('/')!=url:
         p.error('Live report URLs differ from requested public URL: rerun both scripts for this same deployment')
+    local_fingerprint=pipeline_sha256()
+    for label,record in (('evaluation',evaluation),('trace',traces)):
+        fingerprint=record.get('pipeline_sha256')
+        if fingerprint!=local_fingerprint:
+            p.error(f'{label} was not generated from this audited code version. Redeploy and rerun public evaluation AND traces. Expected pipeline_sha256={local_fingerprint}; observed={fingerprint}')
     if evaluation.get('total')!=17 or len(evaluation.get('results',[]))!=17:
         p.error('Expected evaluation for ALL 17 questions')
     expected={'good_join','refusal','clarification'}
@@ -54,6 +62,7 @@ def main():
 
 Status: **{status}**
 
+- Audited pipeline fingerprint: `{local_fingerprint}`
 - Public Hamravesh URL: {url}
 - GitHub source: {opt.repo or '(add your repository link before submission)'}
 - Evaluation results: **{passed}/17**, generated from live HTTP responses; see `eval_report.json`.
@@ -78,7 +87,20 @@ Open the public URL, ask a football question in Persian or English, and inspect 
     mapping=[('README.md',readme.encode('utf8'))]
     mapping += [(name,(ROOT/'reports'/name).read_bytes()) for name in ('eval_report.json','eval_report.md','traces.json','traces.md')]
     mapping += [(name,(ROOT/'data'/name).read_bytes()) for name in ('schema.sql','semantic_model.md')]
-    mapping += [(name,(ROOT/'docs'/name).read_bytes()) for name in ('ARCHITECTURE.md','DEPLOYMENT.md')]
+    mapping += [(name,(ROOT/'docs'/name).read_bytes()) for name in ('ARCHITECTURE.md','DEPLOYMENT.md','CONTAMINATION_AUDIT.md')]
+    # Reviewer can inspect the complete production inference path. No code is hidden.
+    mapping += [(path.relative_to(ROOT).as_posix(),path.read_bytes())
+                for folder in ('app','scripts','tests')
+                for path in sorted((ROOT/folder).glob('*.py'))]
+    # Preserve the old benchmark-shaped regression checks as explicitly archived evidence.
+    archived=ROOT/'docs'/'legacy_tests'
+    if archived.is_dir():
+        mapping += [(p.relative_to(ROOT).as_posix(),p.read_bytes()) for p in sorted(archived.iterdir()) if p.is_file()]
+    if (ROOT/'Dockerfile').exists():mapping.append(('Dockerfile',(ROOT/'Dockerfile').read_bytes()))
+    screenshot_dir=ROOT/'reports'/'screenshots'
+    if screenshot_dir.is_dir():
+        mapping += [('screenshots/'+p.name,p.read_bytes()) for p in sorted(screenshot_dir.iterdir())
+                    if p.is_file() and p.suffix.lower() in ('.png','.jpg','.jpeg','.webp')] 
     with ZipFile(outfile,'w',ZIP_DEFLATED) as z:
         for name,data in mapping:z.writestr(name,data)
     print('Wrote',outfile,'status:',status)

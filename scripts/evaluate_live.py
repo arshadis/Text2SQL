@@ -53,7 +53,8 @@ def _write_report(path: Path, doc: dict, *, markdown: bool = False) -> None:
                          f"Validation: `{r.get('validation','—')}`; dry-run: `{r.get('dry_run','—')}`",
                          f"Quality review: `{r.get('quality_review','—')}`",
                          f"Result normalization: `{r.get('result_normalization','—')}`",
-                         f"Semantic warnings: {r.get('semantic_warnings',[])}",'',
+                         f"Semantic warnings: {r.get('semantic_warnings',[])}",
+                         f"Review evidence: {r.get('review_evidence',[])}",'',
                          '```sql',r.get('sql') or '-- no SQL','```',''])
         payload='\n'.join(text)
     else:
@@ -90,11 +91,16 @@ def main():
     full_run=len(cases)==len(CASES)
     with urlopen(base+'/health',timeout=12) as resp:
         if resp.status!=200:raise SystemExit('Site is not healthy')
+    with urlopen(base+'/api/meta',timeout=12) as resp:
+        meta=json.load(resp)
+    fingerprint=meta.get('pipeline_sha256')
+    if not isinstance(fingerprint,str) or len(fingerprint)!=64:
+        raise SystemExit('Deployment has no source fingerprint: deploy the audited code before evaluation.')
     reports=[]
     out=ROOT/'reports'
     stamp=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     def document(status):
-        return {'url':base,'generated_at':stamp,'status':status,
+        return {'url':base,'generated_at':stamp,'status':status,'pipeline_sha256':fingerprint,
                 'full_run':full_run,'completed':len(reports),
                 'passed':sum(x['pass'] for x in reports),'total':len(cases),
                 'results':reports}
@@ -128,6 +134,7 @@ def main():
                     'result_normalization':obj.get('result_normalization'),
                     'semantic_warnings':obj.get('semantic_warnings'),
                     'quality_review':obj.get('quality_review'),
+                    'review_evidence':obj.get('review_evidence',[]),
                     'model_status':(obj.get('model_diagnostics') or {}).get('status'),
                     'attempts':attempts, 'seconds':round(time.monotonic()-began,2)}
         except (HTTPError,URLError,TimeoutError,OSError,http.client.HTTPException,ValueError) as ex:

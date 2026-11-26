@@ -28,6 +28,9 @@ form.addEventListener('submit',async e=>{
     display('rowcount',data.row_count);display('execution',`${data.execution_ms??0} ms`);
     const m=data.model_diagnostics;
     display('model',m?`${m.status} · ${m.latency_ms} ms · HTTP ${m.http_status}`:'not called');
+    display('review',data.quality_review||'not_run');
+    const evidence=Array.isArray(data.review_evidence)?data.review_evidence:[];
+    display('review-basis',evidence.length?evidence.map(ev=>`${ev.decision}: issues ${ev.original_issues?.length??0}→${ev.candidate_issues?.length??0}, signal ${ev.original_signal??'—'}→${ev.candidate_signal??'—'}`).join(' | '):'—');
     display('total',`${data.total_latency_ms} ms`);display('sql',data.sql||'—');
     display('validation-badge',data.validation==='passed'?'✓ validated':data.validation);
     $('followup').hidden=!state;

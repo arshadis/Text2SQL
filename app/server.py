@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from .db import allowed_relations, ro_connection
 from .pipeline import answer
+from .source_fingerprint import pipeline_sha256
 
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT/'static'
@@ -36,7 +37,7 @@ class Handler(BaseHTTPRequestHandler):
                             'matches':conn.execute('select count(*) from "match"').fetchone()[0]}
                 finally:
                     conn.close()
-                return self._json({'season':'2026-27','snapshot':'2026-11-01',**counts})
+                return self._json({'season':'2026-27','snapshot':'2026-11-01','pipeline_sha256':pipeline_sha256(),**counts})
             except Exception: return self._json({'error':'Database unavailable'},503)
         if path not in FILES: return self._json({'error':'Not found'},404)
         src=STATIC/FILES[path]
