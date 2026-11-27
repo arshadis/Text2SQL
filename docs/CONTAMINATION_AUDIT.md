@@ -153,3 +153,21 @@ benchmarks that silently expect a fixed top-k among equally ranked entities.
 The local offline suite tests the graph, referential integrity, security and
 ranking behavior but does **not** substitute for running the model on the
 public deployment. Do not reuse the previous model evaluation report.
+
+## v5.0 — regression-focused semantic fixes (2026-11-27)
+
+The observed v4.9 public result was **6/17**, with 4/6 independently
+checked non-benchmark responses and three valid traces. A new model score is
+not claimed. The schema graph was revised to prioritize connected relevant
+relations instead of flooding the model with arbitrary FK neighbors. View
+identity matches are explicitly labeled *inferred*, not declared FKs.
+
+Two narrow, testable SQL normalizations were added: removing repeated
+entity-label tuples using DISTINCT when a list of entities was requested,
+and preserving nullable-side zeros for a very restricted one-LEFT-JOIN count.
+All candidates must pass the unchanged read-only SQL executor. A synthetic
+zero-event DB and actual DB coach/team observations provide regression tests.
+A separate aggregate-only cardinality summary helps the model determine if
+historical variation is derivable; no golden SQL or expected result length is
+included in the runtime path. The audited 17 questions are not referenced in
+production inference code. No 3/5 category default was reintroduced.

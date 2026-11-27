@@ -76,8 +76,29 @@ def explain_available_data(question: str, *, max_relations: int = 4) -> dict:
                 field=_ident(col)
                 n,d=con.execute(f'SELECT COUNT({field}), COUNT(DISTINCT {field}) FROM {table}').fetchone()
                 stats.append({'column':col,'non_null':n,'distinct':d})
+            # For time-varying and many-to-many relations, field counts alone
+            # cannot establish whether a value varies within an entity. A
+            # bounded, generic pairwise cardinality summary can. It never
+            # returns a grouped answer, names or row-level data to the model.
+            multiplicity=[]
+            target_ids=[c for c in matching if c.endswith('_id')]
+            grouping_ids=[c for c in columns if c.endswith('_id') and c!='match_id']
+            for target in target_ids[:2]:
+                for parent in grouping_ids:
+                    if parent==target:continue
+                    grouped=(f'SELECT {_ident(parent)},COUNT(DISTINCT {_ident(target)}) AS cardinality '
+                             f'FROM {table} GROUP BY {_ident(parent)}')
+                    multiple,maximum=con.execute(
+                        'SELECT COUNT(*),COALESCE(MAX(cardinality),0) FROM ('+grouped+
+                        ') WHERE cardinality>1').fetchone()
+                    multiplicity.append({'group_field':parent,'observed_field':target,
+                                         'groups_with_multiple_values':multiple,
+                                         'maximum_distinct_values_per_group':maximum})
+                    if len(multiplicity)>=4:break
+                if len(multiplicity)>=4:break
             output.append({'relation':name,'columns':columns[:24],
-                           'observations':total,'field_statistics':stats})
+                           'observations':total,'field_statistics':stats,
+                           'observed_relationship_cardinality':multiplicity})
         return {'source':'readonly_schema','relations':output,
                 'note':'Counts indicate available data, not a precomputed answer.'}
     finally:

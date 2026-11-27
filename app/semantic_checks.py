@@ -120,6 +120,25 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
         if scorer_club_asked and not uses_goal_field('scorer_team_id'):
             issues.append('When the scorer’s own club is requested, link goal.scorer_team_id separately from the credited team.')
 
+    # For a requested SET of named entities (rather than one row per event),
+    # repeated identical label tuples are a grain mismatch. This flags actual
+    # duplicate observed rows without assuming a fixed expected result count.
+    entity_listing = bool(re.search(
+        r'\b(?:which|who|list|show|names?|registered|are there)\b|(?:چه\s|کدام|نام\s|اسامی|فهرست|ثبت[\s\u200c]*شده)',q,re.I))
+    per_event = bool(re.search(
+        r'\b(?:per|for each|each)\s+(?:match|fixture|game|goal|event)\b|'
+        r'(?:در\s+هر\s+(?:مسابقه|بازی)|برای\s+هر\s+(?:مسابقه|بازی)|به\s+ازای\s+هر\s+رویداد)',q,re.I))
+    if (entity_listing and not per_event and len(cols)>=2 and
+        all(re.search(r'(?:name|coach|player|team|club|stadium|referee)',c)
+            for c in cols) and
+        not re.search(r'\b(?:count|sum|avg|min|max)\s*\(',code,re.I) and
+        len(data.get('rows') or [])>=2):
+        rows=data['rows']
+        if (all(len(row)==len(cols) and all(isinstance(v,str) for v in row)
+                for row in rows) and
+            len({tuple(row) for row in rows})<len(rows)):
+            issues.append('The request names a SET of entity-label combinations, but identical label rows repeat. Consider DISTINCT at the requested grain, not one row per underlying event.')
+
     # LEFT JOIN + strict WHERE on its nullable side silently discards zero-event
     # entities. This is a general SQL cardinality warning, not a football rule.
     join=re.search(r'\bLEFT\s+(?:OUTER\s+)?JOIN\s+\"?([A-Za-z_][A-Za-z_0-9]*)\"?\s+(?:AS\s+)?([A-Za-z_][A-Za-z_0-9]*)\b',raw,re.I)

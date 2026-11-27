@@ -117,6 +117,66 @@ def remove_unrequested_ids(question: str, sql: str, data: dict) -> str | None:
     return 'SELECT '+', '.join(retained)+' '+statement[end:]
 
 
+def dedupe_entity_listing(question: str, sql: str, data: dict) -> str | None:
+    """Use SQL DISTINCT for visibly repeated readable entity-label tuples.
+
+    This is a general correction from event-grain to entity-grain, not a
+    stored football query or a benchmark result. It never changes predicates,
+    joins or requested measures. The caller must rerun the SQL in its sandbox.
+    """
+    from .semantic_checks import inspect
+    issues=inspect(question,sql,data)
+    if not any('identical label rows repeat' in issue for issue in issues):
+        return None
+    if not isinstance(sql,str):return None
+    statement=sql.strip().rstrip(';')
+    first=re.match(r'^SELECT\s+',statement,re.I)
+    if not first or re.match(r'^SELECT\s+(?:DISTINCT|ALL)\b',statement,re.I):
+        return None
+    if re.search(r'\b(?:WITH|UNION|INTERSECT|EXCEPT|GROUP\s+BY|HAVING)\b',statement,re.I):
+        return None
+    if re.search(r'\b(?:ORDER|GROUP)\s+BY\s+\d+\b',statement,re.I):
+        return None
+    return statement[:first.end()]+'DISTINCT '+statement[first.end():]
+
+
+def preserve_left_join_zero_counts(question: str, sql: str, data: dict) -> str | None:
+    """Keep zero-event entities in an explicit all-entities count.
+
+    If a single filter on the nullable side of a LEFT JOIN is placed in
+    WHERE, zero-event entities disappear. Relocating it to ON is safe here
+    only for a simple one-join, one-predicate COUNT(alias.field) query.
+    Any other form is left untouched for model review. The SQL sandbox must
+    validate and execute the candidate independently.
+    """
+    if not isinstance(sql,str):return None
+    if not re.search(r'\b(?:all|every|each|registered|complete)\b|(?:همه|تمام|ثبت[\s\u200c]*شده)',question,re.I):
+        return None
+    statement=sql.strip().rstrip(';')
+    if not re.match(r'^SELECT\s+',statement,re.I) or len(re.findall(r'\bJOIN\b',statement,re.I))!=1:
+        return None
+    if re.search(r'\b(?:UNION|INTERSECT|EXCEPT|WITH|HAVING)\b',statement,re.I):return None
+    match=re.search(
+        r'\bLEFT\s+(?:OUTER\s+)?JOIN\s+"?[A-Za-z_][A-Za-z_0-9]*"?\s+'
+        r'(?:AS\s+)?(?P<alias>[A-Za-z_][A-Za-z_0-9]*)\s+ON\s+'
+        r'(?P<on>.*?)\s+WHERE\s+(?P<where>.*?)\s*'
+        r'(?=\bGROUP\s+BY\b|\bORDER\s+BY\b|\bLIMIT\b|$)',
+        statement,re.I|re.S)
+    if not match:return None
+    alias=match.group('alias')
+    predicate=match.group('where').strip()
+    if not re.fullmatch(
+        rf'{re.escape(alias)}\.[A-Za-z_][A-Za-z_0-9]*\s*='
+        r'\s*(?:\'[^\']*\'|"[^"]*"|\d+)',predicate,re.I):
+        return None
+    if not re.search(rf'\bCOUNT\s*\(\s*{re.escape(alias)}\.[A-Za-z_][A-Za-z_0-9]*\s*\)',statement,re.I):
+        return None
+    # Keep the original table and alias spelling, only rewrite ON/WHERE.
+    head=statement[match.start():match.start('on')]
+    replaced=head+'('+match.group('on').strip()+') AND '+predicate+' '
+    return statement[:match.start()]+replaced+statement[match.end():]
+
+
 def normalize(question: str, sql: str, data: dict) -> str | None:
     """Only apply generic projection cleanup and *explicit* top-N limits.
 
@@ -126,6 +186,12 @@ def normalize(question: str, sql: str, data: dict) -> str | None:
     cleaned=remove_unrequested_ids(question,sql,data)
     if cleaned:
         return cleaned
+    unique=dedupe_entity_listing(question,sql,data)
+    if unique:
+        return unique
+    retained=preserve_left_join_zero_counts(question,sql,data)
+    if retained:
+        return retained
     c=infer_contract(question)
     if c.target_rows is None or not c.ordered or not isinstance(sql,str):
         return None
