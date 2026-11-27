@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from collections import Counter
 from .db import RejectedSQL, execute_readonly
 from .llm import ModelError, plan
 from .quality import reconsider_refusal, reconsider_clarification, review_feedback, semantic_signal
@@ -10,6 +11,29 @@ from .contract import diagnostics, infer_contract
 from .normalizer import normalize, expand_verified_ties
 from .narrative import summarize
 from .schema_evidence import explain_available_data
+
+def _same_facts_after_projection(before: dict, after: dict) -> bool:
+    """Allow cosmetic reviewer edits only if actual database facts are unchanged.
+
+    Query text/style is not evidence that a revision is an improvement. The
+    candidate must preserve the whole observed multiset of rows after dropping
+    zero or more unrequested display fields. This deliberately does not infer
+    a benchmark answer, a preferred top-k, or an arbitrary statistic.
+    """
+    previous=list(before.get('columns') or ())
+    proposed=list(after.get('columns') or ())
+    if (not proposed or len(proposed)>len(previous) or len(set(previous))!=len(previous)
+        or len(set(proposed))!=len(proposed) or not set(proposed).issubset(set(previous))
+        or before.get('truncated') or after.get('truncated')):
+        return False
+    try:
+        idx=[previous.index(col) for col in proposed]
+        one=Counter(tuple(repr(row[i]) for i in idx) for row in before['rows'])
+        two=Counter(tuple(repr(value) for value in row) for row in after['rows'])
+        return one==two
+    except (KeyError,IndexError,TypeError):
+        return False
+
 
 WRITE_CUES = re.compile(r'\b(?:delete|drop|truncate|update|insert|alter|create|remove\s+from|wipe|erase)\b|(?:حذف\s*کن|پاک\s*کن|پاک\s*کردن|ویرایش\s*کن|اضافه\s*کن|تغییر\s*بده|بازی\s*ها\s*را\s*پاک)',re.I)
 
@@ -208,10 +232,18 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                         after_semantic=set(semantic_issues(question,revised['sql'],alternative,
                                                   explicit_limit=infer_contract(question).target_rows))
                         introduced=after_semantic-before_semantic
-                        improves=(not introduced and
-                                  (len(after_issues)<len(before_issues) or
-                                   (len(after_issues)==len(before_issues) and
-                                    after_signal > before_signal + 0.1)))
+                        # Changes that repair objectively observed semantic
+                        # violations may legitimately change numerical rows.
+                        # Cosmetic changes are admissible ONLY when actual
+                        # database facts remain exactly the same (as a multiset
+                        # after projection). A "nicer" score cannot justify a
+                        # different answer or fabricated preferred top-k.
+                        fixed_semantics=bool(before_semantic-after_semantic)
+                        genuine_semantic_repair=(not introduced and fixed_semantics)
+                        verified_cosmetic=(not introduced and not fixed_semantics and
+                            len(after_issues)<len(before_issues) and
+                            _same_facts_after_projection(data,alternative))
+                        improves=genuine_semantic_repair or verified_cosmetic
                         review_evidence.append({'original_issues':before_issues,'candidate_issues':after_issues,
                             'original_semantic_issues':sorted(before_semantic),
                             'introduced_semantic_issues':sorted(introduced),
@@ -221,8 +253,9 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                             'candidate_columns':alternative.get('columns',[]),
                             'original_row_count':data.get('row_count'),
                             'candidate_row_count':alternative.get('row_count'),
-                            'reason':('candidate has no new semantic warning and reduces the observed issues or improves a grounded signal'
-                                       if improves else 'candidate did not demonstrably improve independent diagnostics'),
+                            'reason':('fixes an independently detected semantic contradiction' if genuine_semantic_repair else
+                                      'preserves all real result values while improving presentation' if verified_cosmetic else
+                                      'no proven semantic improvement or identical observed facts'),
                             'decision':'accepted' if improves else 'rejected'})
                         if improves:
                             sql=revised['sql'];data=alternative
@@ -281,6 +314,55 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                     normalization='verified_ties_expanded'
         except RejectedSQL:
             pass
+    # A validated query can still contradict its stated question. Only severe,
+    # demonstrable semantic mismatches get one final bounded model repair.
+    # This is not an output-format chase; it does not invent an evaluator top-k.
+    from .semantic_checks import inspect as inspect_semantics
+    hard_issue_clues=(
+        'home/away-only point total', 'NULL final scores',
+        'goal scorers but the result', 'credited goal.team_id role',
+        'club that benefited', 'own team', 'SAME team', 'double-count',
+    )
+    before_hard=[v for v in inspect_semantics(question,sql,data)
+                 if any(clue.lower() in v.lower() for clue in hard_issue_clues)]
+    if before_hard and review_enabled:
+        try:
+            feedback=review_feedback(question,sql,data)
+            feedback.update({
+                'mode':'bounded_question_consistency_repair',
+                'observed_semantic_contradictions':before_hard,
+                'instruction':('The executed SQL is valid but contradicts the question in '
+                    'the specific ways listed. Correct the actual meaning using schema '
+                    'and role-aware joins. Do not copy any reference SQL, invent data, '
+                    'or introduce a guessed top-N. Return one SELECT only.'),
+            })
+            proposed,fix_diag=review_planner(question,previous_question=previous_question,feedback=feedback)
+            if proposed['action']=='answer_from_query' and proposed['sql'].strip()!=sql.strip():
+                fixed=runner(proposed['sql'])
+                after_hard=[v for v in inspect_semantics(question,proposed['sql'],fixed)
+                            if any(clue.lower() in v.lower() for clue in hard_issue_clues)]
+                improvements=(len(after_hard)<len(before_hard)
+                              and not fixed.get('truncated')
+                              and fixed.get('validation')=='passed')
+                review_evidence.append({
+                    'stage':'question_consistency_repair', 'original_sql':sql,
+                    'candidate_sql':proposed['sql'], 'original_issues':before_hard,
+                    'candidate_issues':after_hard,
+                    'original_row_count':data.get('row_count'),
+                    'candidate_row_count':fixed.get('row_count'),
+                    'decision':'accepted' if improvements else 'rejected',
+                })
+                if improvements:
+                    sql,data=proposed['sql'],fixed
+                    review_status='semantic_repair_adopted'
+                    normalization='not_applicable_after_semantic_repair'
+                else:
+                    review_status='semantic_repair_rejected'
+            if diag is not None:
+                diag={**diag,'latency_ms':diag.get('latency_ms',0)+fix_diag.get('latency_ms',0)}
+        except (ModelError,RejectedSQL,ValueError):
+            review_status='semantic_repair_unavailable'
+
     count=data['row_count']
     # The presentation never invents factual data; the table of rows is the answer.
     summary=summarize(data)

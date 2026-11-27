@@ -120,6 +120,29 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
         if scorer_club_asked and not uses_goal_field('scorer_team_id'):
             issues.append('When the scorer’s own club is requested, link goal.scorer_team_id separately from the credited team.')
 
+    # Do not silently substitute an aggregate over *teams* for a user request
+    # about named individual scorers. This checks presentation grain and schema
+    # identity, not any stored expected row or a benchmark-specific output.
+    individual_scorers = bool(re.search(
+        r'\b(?:scorers?|goalscorers?|goal\s+scorers?)\b|گلزن|گلزنان',q,re.I))
+    if individual_scorers and data.get('row_count',0)>0:
+        names_present = any(re.search(r'(?:player|scorer|person|athlete).*name|name.*(?:player|scorer)',c)
+                            for c in cols)
+        has_player_relation = bool(re.search(r'\b(?:FROM|JOIN)\s+"?player"?\b',raw,re.I))
+        if not (has_player_relation and (names_present or 'name_fa' in cols)):
+            issues.append('The request is about individual goal scorers but the result does not identify a named player; do not aggregate exclusively by club.')
+
+    # For an explicitly requested beneficiary, using the goal credited-team
+    # key is necessary, but not sufficient: the projection must identify that
+    # team rather than simply showing the fixture participants.
+    if own_goal_asked and credited_asked and re.search(r'\bgoal\b',code,re.I):
+        credited_link = any(re.search(
+            rf'\b(?:[a-z_][a-z_0-9]*\.)?team_id\s*=\s*{re.escape(alias)}\.team_id\b|'
+            rf'\b{re.escape(alias)}\.team_id\s*=\s*(?:[a-z_][a-z_0-9]*\.)?team_id\b',
+            code,re.I) for alias in goal_names)
+        if not credited_link:
+            issues.append('Identify the benefited team by an explicit join to the credited goal.team_id role; listing home and away sides does not establish that role.')
+
     # For a requested SET of named entities (rather than one row per event),
     # repeated identical label tuples are a grain mismatch. This flags actual
     # duplicate observed rows without assuming a fixed expected result count.

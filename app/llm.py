@@ -8,6 +8,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from .contract import instruction
 from .schema_graph import focused_relations
+from .schema_evidence import explain_available_data
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = (ROOT / 'data' / 'schema.sql').read_text(encoding='utf-8')
@@ -135,6 +137,13 @@ def plan(question: str, *, previous_question: str | None=None,
     if not key: raise ModelError('GAPGPT_API_KEY is not configured (server-side secret)')
     base=os.environ.get('GAPGPT_BASE_URL','https://api.gapgpt.app/v1').rstrip('/')
     if not base.startswith('https://'): raise ModelError('API base URL must use HTTPS')
+    # A narrow, schema-derived observation summary helps interpret changes
+    # between recorded states without a prewritten change-detection query.
+    # It is based solely on catalog statistics, not on eval questions/answers.
+    temporal_question=bool(re.search(
+        r'\b(?:change[ds]?|changing|histor(?:y|ical)|different\s+coaches?)\b|'
+        r'تغییر|عوض\s+شد|قبلی|سابق',question,re.I))
+    observed_evidence=(explain_available_data(question) if temporal_question else None)
     messages=[{'role':'system','content':SYSTEM},
               {'role':'system','content':'SCHEMA (authoritative):\n'+SCHEMA+'\n\nSEMANTIC MODEL (authoritative):\n'+SEMANTIC},
               {'role':'user','content':json.dumps({'question':question,
@@ -142,7 +151,8 @@ def plan(question: str, *, previous_question: str | None=None,
                     'validation_feedback_if_repairing':error,
                     'semantic_review_feedback':feedback,
                     'question_derived_result_contract':instruction(question),
-                    'focused_schema_graph':focused_relations(question)},ensure_ascii=False)}]
+                    'focused_schema_graph':focused_relations(question),
+                    'time_varying_schema_evidence':observed_evidence},ensure_ascii=False)}]
     body=json.dumps({'model':model,'temperature':0,'messages':messages},ensure_ascii=False).encode('utf8')
     request=Request(base+'/chat/completions',data=body,headers={
         'Authorization':'Bearer '+key,'Content-Type':'application/json'},method='POST')
