@@ -344,6 +344,10 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
         'home/away-only point total', 'NULL final scores',
         'goal scorers but the result', 'credited goal.team_id role',
         'club that benefited', 'own team', 'SAME team', 'double-count',
+        'goalkeeper position', 'starting goalkeeper', 'clean sheet reports',
+        'BOTH match_id and team_id', 'goals_against=0',
+        'games played at a stadium', 'is_own_goal=1',
+        'fixture sides', 'physically played fixtures',
     )
     before_hard=[v for v in inspect_semantics(question,sql,data)
                  if any(clue.lower() in v.lower() for clue in hard_issue_clues)]
@@ -363,7 +367,13 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                 fixed=runner(proposed['sql'])
                 after_hard=[v for v in inspect_semantics(question,proposed['sql'],fixed)
                             if any(clue.lower() in v.lower() for clue in hard_issue_clues)]
+                # A repair must remove an actual contradiction WITHOUT
+                # introducing another independently observable contradiction.
+                # More attractive row counts alone are not evidence.
+                before_all=set(inspect_semantics(question,sql,data))
+                after_all=set(inspect_semantics(question,proposed['sql'],fixed))
                 improvements=(len(after_hard)<len(before_hard)
+                              and not (after_all-before_all)
                               and not fixed.get('truncated')
                               and fixed.get('validation')=='passed')
                 review_evidence.append({

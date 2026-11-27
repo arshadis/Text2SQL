@@ -177,3 +177,14 @@ The next v4.7 release adds conservative role/status consistency warnings,
 verifiable presentation-only ID projection cleanup, and original/candidate
 SQL in public review evidence. **No v4.7 live score is claimed**; rebuild,
 verify the source/config hashes, and run a new public evaluation.
+
+
+### v5.4 — domain-grounded focused context
+
+In focused mode, the trusted `data/semantic_model.md` accompanies the small,
+question-selected SQLite catalog. This preserves general JOIN and event-role
+semantics that were omitted by the v5.3 DDL-only focused mode. Independent
+checks now flag goalkeeper/team attribution, finished stadium game counts,
+and own-goal event flags. The `scripts/audit_live_semantics.py` tool inspects
+recorded public SQL without reading reference answers. A no-warning result
+is not proof of answer correctness. All GapGPT routing remains unchanged.

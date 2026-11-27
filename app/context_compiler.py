@@ -1,13 +1,16 @@
 """Question-focused SQL catalog context, compiled from the actual SQLite DB.
 
 No gold SQL, benchmark questions, or previously recorded answers are consulted.
-The full semantic dictionary is still available in fallback mode for debugging.
+The source-domain semantic dictionary accompanies relevant DDL in focused mode.
 """
 from __future__ import annotations
 
 from .db import ro_connection
 from .schema_graph import focused_relations
 from .query_plan import derive_query_plan
+from pathlib import Path
+
+SEMANTIC_DICTIONARY = (Path(__file__).resolve().parents[1] / "data" / "semantic_model.md").read_text(encoding="utf-8")
 
 
 def select_relevant_relations(question: str, *, max_relations: int = 9) -> list[str]:
@@ -75,7 +78,10 @@ def compiled_context(question: str, *, max_relations: int = 9) -> str:
         names=['team','player','"match"','v_standings','v_team_match']
     con=ro_connection()
     try:
-        parts=[BASICS,'Selected SQLite relation definitions (authoritative database schema):']
+        parts=[BASICS,
+            'DOMAIN SEMANTICS (authoritative; curated football data dictionary, not answer SQL):',
+            SEMANTIC_DICTIONARY,
+            'Selected SQLite relation definitions (authoritative database schema):']
         for name in names:
             clean=name.strip('"')
             record=con.execute('SELECT sql FROM sqlite_master WHERE name=? AND type IN ("table","view")',(clean,)).fetchone()
