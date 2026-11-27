@@ -24,7 +24,7 @@ def _top_level_clauses(sql: str) -> dict[str,int]:
         if ch=='(': depth+=1;i+=1;continue
         if ch==')': depth=max(0,depth-1);i+=1;continue
         if depth==0:
-            match=re.match(r'\b(order\s+by|limit|offset|union|intersect|except)\b',sql[i:],re.I)
+            match=re.match(r'\b(group\s+by|having|order\s+by|limit|offset|union|intersect|except)\b',sql[i:],re.I)
             if match:
                 found[match.group(1).lower().replace(' ','_')]=i
                 if match.group(1).lower().startswith('order'):found['order']=i
@@ -133,7 +133,10 @@ def dedupe_entity_listing(question: str, sql: str, data: dict) -> str | None:
     first=re.match(r'^SELECT\s+',statement,re.I)
     if not first or re.match(r'^SELECT\s+(?:DISTINCT|ALL)\b',statement,re.I):
         return None
-    if re.search(r'\b(?:WITH|UNION|INTERSECT|EXCEPT|GROUP\s+BY|HAVING)\b',statement,re.I):
+    if re.search(r'\b(?:WITH|UNION|INTERSECT|EXCEPT)\b',statement,re.I):
+        return None
+    clauses=_top_level_clauses(statement)
+    if 'group_by' in clauses or 'having' in clauses:
         return None
     if re.search(r'\b(?:ORDER|GROUP)\s+BY\s+\d+\b',statement,re.I):
         return None

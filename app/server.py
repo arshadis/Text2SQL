@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from .db import allowed_relations, ro_connection
 from .pipeline import answer
+from .llm import configured_gapgpt_base, ModelError
 from .source_fingerprint import pipeline_sha256, runtime_config_sha256
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -39,7 +40,9 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
                 return self._json({'season':'2026-27','snapshot':'2026-11-01','pipeline_sha256':pipeline_sha256(),
                                    'runtime_config_sha256':runtime_config_sha256(),
-                                   'provider_model':os.getenv('GAPGPT_MODEL','gpt-4o-mini'),**counts})
+                                   'provider_model':os.getenv('GAPGPT_MODEL','gpt-4o-mini'),
+                                   'provider_base_url':configured_gapgpt_base(),**counts})
+            except ModelError: return self._json({'error':'GapGPT endpoint configuration invalid'},503)
             except Exception: return self._json({'error':'Database unavailable'},503)
         if path not in FILES: return self._json({'error':'Not found'},404)
         src=STATIC/FILES[path]

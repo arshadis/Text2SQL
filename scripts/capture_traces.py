@@ -146,7 +146,7 @@ def main(argv=None):
         'public_url': base,
         'pipeline_sha256':fingerprint,
         'runtime_config_sha256':runtime_config,
-        'provider_model':meta.get('provider_model'),
+        'provider_model':meta.get('provider_model'),'provider_base_url':meta.get('provider_base_url'),
         'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'traces': result,
         'join_attempts': join_attempts,

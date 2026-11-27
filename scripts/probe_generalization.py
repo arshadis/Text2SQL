@@ -74,7 +74,7 @@ def main():
     output.mkdir(exist_ok=True)
     record={'public_url':base,'pipeline_sha256':fingerprint,
             'runtime_config_sha256':meta.get('runtime_config_sha256'),
-            'provider_model':meta.get('provider_model'),
+            'provider_model':meta.get('provider_model'),'provider_base_url':meta.get('provider_base_url'),
             'generated_at':datetime.now(timezone.utc).isoformat(),
             'description':'Structural smoke probes only; NOT semantic gold scoring',
             'probes':rows}

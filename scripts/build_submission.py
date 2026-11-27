@@ -44,6 +44,10 @@ def main():
     if (not isinstance(config_eval,str) or len(config_eval)!=64 or
             config_eval != config_traces):
         p.error('Live evaluation and traces must use the SAME runtime model/configuration; rerun both after deployment.')
+    official_provider='https://api.gapgpt.app/v1'
+    for label,record in (('evaluation',evaluation),('trace',traces)):
+        if record.get('provider_base_url') != official_provider:
+            p.error(f'{label} does not attest to the official GapGPT provider endpoint; rerun the reports on the audited deployment.')
     if evaluation.get('total')!=17 or len(evaluation.get('results',[]))!=17:
         p.error('Expected evaluation for ALL 17 questions')
     expected={'good_join','refusal','clarification'}
@@ -69,6 +73,7 @@ Status: **{status}**
 
 - Audited pipeline fingerprint: `{local_fingerprint}`
 - Runtime model/config fingerprint: `{config_eval}`; model: `{evaluation.get('provider_model')}`
+- Verified model API endpoint: `{evaluation.get('provider_base_url')}`
 - Public Hamravesh URL: {url}
 - GitHub source: {opt.repo or '(add your repository link before submission)'}
 - Evaluation results: **{passed}/17**, generated from live HTTP responses; see `eval_report.json`.

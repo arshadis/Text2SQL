@@ -35,6 +35,23 @@ def _same_facts_after_projection(before: dict, after: dict) -> bool:
         return False
 
 
+def _verified_entity_set_dedupe(before: dict, after: dict) -> bool:
+    """Candidate SELECT DISTINCT returns precisely the original observed set.
+
+    Never accept a truncation-limited sample or a changed field; this is only
+    for a user's request for unique entity labels, never for event listings.
+    """
+    if (before.get('truncated') or after.get('truncated')
+        or before.get('columns')!=after.get('columns')):
+        return False
+    try:
+        one=[tuple(repr(v) for v in row) for row in before['rows']]
+        two=[tuple(repr(v) for v in row) for row in after['rows']]
+        return len(one)>len(two) and len(two)==len(set(one)) and set(two)==set(one)
+    except (KeyError,TypeError):
+        return False
+
+
 WRITE_CUES = re.compile(r'\b(?:delete|drop|truncate|update|insert|alter|create|remove\s+from|wipe|erase)\b|(?:حذف\s*کن|پاک\s*کن|پاک\s*کردن|ویرایش\s*کن|اضافه\s*کن|تغییر\s*بده|بازی\s*ها\s*را\s*پاک)',re.I)
 
 
@@ -288,9 +305,14 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                 revised_data=runner(candidate)  # validate, dry-run, read-only execute
                 previous_issues=diagnostics(question,sql,data)
                 next_issues=diagnostics(question,candidate,revised_data)
-                if len(next_issues)<len(previous_issues):
+                # A verified DISTINCT cleanup is legitimate even when a
+                # subquery's aggregate obscured the generic warning.
+                from .normalizer import dedupe_entity_listing
+                safe_set=(candidate==dedupe_entity_listing(question,sql,data)
+                          and _verified_entity_set_dedupe(data,revised_data))
+                if len(next_issues)<len(previous_issues) or safe_set:
                     sql,data=candidate,revised_data
-                    normalization='applied'
+                    normalization='verified_entity_set' if safe_set else 'applied'
                 else:
                     normalization='not_better'
             else:
@@ -363,6 +385,23 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
         except (ModelError,RejectedSQL,ValueError):
             review_status='semantic_repair_unavailable'
 
+    # A semantic repair can introduce an unnecessary ID display column.
+    # Run a final projection-only cleanup after repair, and accept it ONLY
+    # when every observed fact is preserved. No benchmark-specific shaping.
+    if (review_status=='semantic_repair_adopted' and planner is plan and
+        os.getenv('RESULT_NORMALIZATION_ENABLED','1').lower() not in ('0','false','no')):
+        from .normalizer import remove_unrequested_ids
+        projection=remove_unrequested_ids(question,sql,data)
+        if projection:
+            try:
+                projected=runner(projection)
+                if (_same_facts_after_projection(data,projected) and
+                    not (set(inspect_semantics(question,projection,projected))-
+                         set(inspect_semantics(question,sql,data)))):
+                    sql,data=projection,projected
+                    normalization='verified_post_repair_projection'
+            except RejectedSQL:
+                pass
     count=data['row_count']
     # The presentation never invents factual data; the table of rows is the answer.
     summary=summarize(data)

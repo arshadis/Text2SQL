@@ -126,7 +126,8 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
     individual_scorers = bool(re.search(
         r'\b(?:scorers?|goalscorers?|goal\s+scorers?)\b|گلزن|گلزنان',q,re.I))
     if individual_scorers and data.get('row_count',0)>0:
-        names_present = any(re.search(r'(?:player|scorer|person|athlete).*name|name.*(?:player|scorer)',c)
+        names_present = any(c in ('scorer','player','scorer_name','player_name','goal_scorer')
+                            or re.search(r'(?:player|scorer|person|athlete).*name|name.*(?:player|scorer)',c)
                             for c in cols)
         has_player_relation = bool(re.search(r'\b(?:FROM|JOIN)\s+"?player"?\b',raw,re.I))
         if not (has_player_relation and (names_present or 'name_fa' in cols)):
@@ -154,7 +155,7 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
     if (entity_listing and not per_event and len(cols)>=2 and
         all(re.search(r'(?:name|coach|player|team|club|stadium|referee)',c)
             for c in cols) and
-        not re.search(r'\b(?:count|sum|avg|min|max)\s*\(',code,re.I) and
+        not re.search(r'\b(?:count|sum|avg|min|max)\s*\(', re.split(r'\bFROM\b',raw,maxsplit=1,flags=re.I)[0],re.I) and
         len(data.get('rows') or [])>=2):
         rows=data['rows']
         if (all(len(row)==len(cols) and all(isinstance(v,str) for v in row)

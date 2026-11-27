@@ -105,7 +105,7 @@ def main():
     def document(status):
         return {'url':base,'generated_at':stamp,'status':status,'pipeline_sha256':fingerprint,
                 'runtime_config_sha256':runtime_config,
-                'provider_model':meta.get('provider_model'),
+                'provider_model':meta.get('provider_model'),'provider_base_url':meta.get('provider_base_url'),
                 'full_run':full_run,'completed':len(reports),
                 'passed':sum(x['pass'] for x in reports),'total':len(cases),
                 'results':reports}

@@ -5,7 +5,8 @@ import os
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.parse import urlparse
 from .contract import instruction
 from .schema_graph import focused_relations
 from .schema_evidence import explain_available_data
@@ -111,6 +112,31 @@ length for any entity class unless the user requested it.
 
 class ModelError(RuntimeError): pass
 
+
+class _RejectRedirect(HTTPRedirectHandler):
+    """Never forward a provider credential to an unexpected redirect target."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def configured_gapgpt_base() -> str:
+    """Fail closed if a GapGPT credential might be sent to a different host.
+
+    This is deliberately strict: the intended integration is the official
+    OpenAI-compatible GapGPT API, not an arbitrary proxy. No key is disclosed.
+    """
+    base=os.environ.get('GAPGPT_BASE_URL','https://api.gapgpt.app/v1').strip().rstrip('/')
+    parsed=urlparse(base)
+    try:
+        port=parsed.port
+    except ValueError as exc:
+        raise ModelError('Malformed GapGPT API address') from exc
+    if (parsed.scheme!='https' or parsed.hostname!='api.gapgpt.app'
+        or parsed.username or parsed.password or port not in (None,443)
+        or parsed.path!='/v1' or parsed.params or parsed.query or parsed.fragment):
+        raise ModelError('GAPGPT_BASE_URL must be https://api.gapgpt.app/v1')
+    return 'https://api.gapgpt.app/v1'
+
 def _extract(raw):
     if not isinstance(raw,str): raise ModelError('Model did not produce text')
     text=raw.strip()
@@ -135,8 +161,7 @@ def plan(question: str, *, previous_question: str | None=None,
     key=os.environ.get('GAPGPT_API_KEY')
     model=os.environ.get('GAPGPT_MODEL','gpt-4o-mini')
     if not key: raise ModelError('GAPGPT_API_KEY is not configured (server-side secret)')
-    base=os.environ.get('GAPGPT_BASE_URL','https://api.gapgpt.app/v1').rstrip('/')
-    if not base.startswith('https://'): raise ModelError('API base URL must use HTTPS')
+    base=configured_gapgpt_base()
     # A narrow, schema-derived observation summary helps interpret changes
     # between recorded states without a prewritten change-detection query.
     # It is based solely on catalog statistics, not on eval questions/answers.
@@ -160,7 +185,7 @@ def plan(question: str, *, previous_question: str | None=None,
     begin=time.monotonic()
     try:
         if transport is None:
-            with urlopen(request,timeout=timeout) as response:
+            with build_opener(_RejectRedirect()).open(request,timeout=timeout) as response:
                 payload=json.loads(response.read(200000))
                 code=response.status
         else:
@@ -171,5 +196,5 @@ def plan(question: str, *, previous_question: str | None=None,
         content=payload['choices'][0]['message']['content']
     except (TypeError,KeyError,IndexError) as e: raise ModelError('GapGPT response structure was unexpected') from e
     route=_extract(content)
-    return route, {'provider':'GapGPT','model':model,'status':'ok','http_status':code,
+    return route, {'provider':'GapGPT','provider_base_url':base,'model':model,'status':'ok','http_status':code,
                    'latency_ms':round((time.monotonic()-begin)*1000)}

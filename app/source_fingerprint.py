@@ -24,6 +24,7 @@ def pipeline_sha256() -> str:
 # include GAPGPT_API_KEY or any authentication token in this fingerprint.
 def runtime_config_sha256() -> str:
     defaults={
+        'GAPGPT_BASE_URL':'https://api.gapgpt.app/v1',
         'GAPGPT_MODEL':'gpt-4o-mini',
         'GAPGPT_TIMEOUT_SECONDS':'12',
         'GAPGPT_REVIEW_ENABLED':'1',
