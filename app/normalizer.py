@@ -140,3 +140,58 @@ def normalize(question: str, sql: str, data: dict) -> str | None:
     if 'limit' in clauses:
         return None
     return statement+f' LIMIT {c.target_rows}'
+
+
+def expand_verified_ties(question: str, sql: str, data: dict, runner) -> tuple[str,dict] | None:
+    """Preserve all *observed* leaders tied for first in an unspecified ranking.
+
+    This is derived from the query's actual metric and independently executed
+    database rows. It is not a preselected category top-k or a benchmark size.
+    Only a simple trailing LIMIT 1 is eligible. The candidate must be run via
+    the production read-only sandbox before it is returned to the caller.
+    """
+    contract=infer_contract(question)
+    if contract.grain!='ranking' or contract.target_rows is not None:
+        return None
+    if not isinstance(sql,str):return None
+    statement=sql.strip().rstrip(';')
+    if not re.search(r'\bORDER\s+BY\b',statement,re.I):return None
+    if not re.search(r'\bLIMIT\s+1\s*$',statement,re.I):return None
+    if re.search(r'\b(?:OFFSET|FETCH|UNION|INTERSECT|EXCEPT)\b',statement,re.I):return None
+    columns=list(data.get('columns') or ())
+    rows=list(data.get('rows') or ())
+    if len(rows)!=1 or len(columns)<2:return None
+    # The metric must be a projected numeric quantity, not an identifier.
+    metric_idx=next((i for i in range(len(columns)-1,-1,-1)
+                    if (isinstance(rows[0][i],(int,float)) and not isinstance(rows[0][i],bool)
+                        and not str(columns[i]).lower().endswith('_id')
+                        and str(columns[i]).lower() not in ('round','minute','added_time'))),None)
+    if metric_idx is None:return None
+    metric=columns[metric_idx]
+    order=re.search(r'\bORDER\s+BY\s+(.*?)(?:\bLIMIT\b|$)',statement,re.I|re.S)
+    if not order:return None
+    first_sort=order.group(1).split(',',1)[0].strip()
+    if not re.search(r'\bDESC\b',first_sort,re.I):return None
+    # We cannot infer the right metric if ORDER BY begins with a different
+    # projected expression; reject instead of stretching ties speculatively.
+    if not (re.search(r'\b'+re.escape(str(metric))+r'\b',first_sort,re.I)
+            or first_sort.upper().startswith(str(metric_idx+1)+' ')):
+        return None
+    # Preview is independently validated and capped by execute_readonly.
+    preview_sql=re.sub(r'\bLIMIT\s+1\s*$','LIMIT 100',statement,flags=re.I)
+    preview=runner(preview_sql)
+    if preview.get('truncated'):
+        return None
+    sample=preview.get('rows') or []
+    if len(sample)<2 or sample[0][metric_idx]!=sample[1][metric_idx]:
+        return None
+    n=0
+    for row in sample:
+        if row[metric_idx]!=sample[0][metric_idx]:break
+        n+=1
+    if n<2 or n>=100:return None
+    candidate=re.sub(r'\bLIMIT\s+1\s*$',f'LIMIT {n}',statement,flags=re.I)
+    replacement=runner(candidate)
+    if (replacement.get('columns')!=columns or replacement.get('row_count')!=n
+        or replacement.get('rows')!=sample[:n]):return None
+    return candidate,replacement

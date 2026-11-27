@@ -2,6 +2,7 @@
 from __future__ import annotations
 import re
 from .contract import diagnostics, instruction
+from .schema_graph import focused_relations
 
 SUPPORTED_TERMS = re.compile(
     r'\b(?:coaches?|managers?|formations?|goalkeepers?|goals?|matches?|cards?|referees?|penalt(?:y|ies)|'
@@ -40,6 +41,7 @@ def review_feedback(question: str, sql: str, data: dict) -> dict:
     """Share actual SQL/rows and generic guardrails, never a reference solution."""
     hints=[
         'Check relation and column meanings from the supplied schema and semantic dictionary.',
+        'Use the focused schema FK edges to verify the identity and role of every entity, not just SQL syntax.',
         'A valid SQL query can still be semantically wrong. Explain whether it answers the precise user metric, subjects, filters, status and output fields.',
         'Check the grain of aggregation and avoid fanout from one-to-many joins.',
         'Preserve user-requested filters, time scope, metrics and any EXPLICIT top-N.',
@@ -57,6 +59,7 @@ def review_feedback(question: str, sql: str, data: dict) -> dict:
     return {
         'mode':'generic_semantic_review',
         'question_derived_result_contract':instruction(question),
+        'focused_schema_graph':focused_relations(question),
         'observed_contract_violations':diagnostics(question,sql,data),
         'instruction':'Revise only if there is a real semantic mistake based on the question and schema. All revised SQL is validated by an independent read-only sandbox.',
         'candidate_sql':sql,

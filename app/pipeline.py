@@ -7,7 +7,7 @@ from .db import RejectedSQL, execute_readonly
 from .llm import ModelError, plan
 from .quality import reconsider_refusal, reconsider_clarification, review_feedback, semantic_signal
 from .contract import diagnostics, infer_contract
-from .normalizer import normalize
+from .normalizer import normalize, expand_verified_ties
 from .narrative import summarize
 from .schema_evidence import explain_available_data
 
@@ -264,6 +264,23 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                 normalization='not_applicable'
         except RejectedSQL:
             normalization='rejected_by_sandbox'
+    # Preserve real ties at the top of an unspecified ranking, not a
+    # benchmark-specific number of rows. The read-only executor checks both
+    # the preview and the final candidate. All schema/role diagnostics still
+    # apply after this optional presentation change.
+    if planner is plan and os.getenv('RESULT_NORMALIZATION_ENABLED','1').lower() not in ('0','false','no'):
+        try:
+            tied=expand_verified_ties(question,sql,data,runner)
+            if tied:
+                proposed,observed=tied
+                from .semantic_checks import inspect as inspect_semantics
+                before=set(inspect_semantics(question,sql,data))
+                after=set(inspect_semantics(question,proposed,observed))
+                if not after-before:
+                    sql,data=proposed,observed
+                    normalization='verified_ties_expanded'
+        except RejectedSQL:
+            pass
     count=data['row_count']
     # The presentation never invents factual data; the table of rows is the answer.
     summary=summarize(data)

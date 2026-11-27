@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from .contract import instruction
+from .schema_graph import focused_relations
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = (ROOT / 'data' / 'schema.sql').read_text(encoding='utf-8')
@@ -26,7 +27,10 @@ WITH ... SELECT. For every other action sql MUST be null.
 
 First determine which metric, entities, filter, scope and output columns the
 actual user asked for. Use only relations from the supplied schema. Reason about
-the correct unit of analysis and how joins can multiply records. Any time
+the correct unit of analysis and how joins can multiply records. The supplied
+focused_schema_graph is an objective subset of the SQLite catalog; it gives
+FK edges, not an answer template. Follow an FK chain when a requested
+attribute is stored in a different relation. Any time
 range, inequality, team attribution and tie-breaking must follow the user's
 wording and the schema, not examples from a test set. When a top-N count is
 explicit, follow it. Otherwise do not assume a universal top-3/top-5; give a
@@ -137,7 +141,8 @@ def plan(question: str, *, previous_question: str | None=None,
                     'previous_question_if_clarifying':previous_question,
                     'validation_feedback_if_repairing':error,
                     'semantic_review_feedback':feedback,
-                    'question_derived_result_contract':instruction(question)},ensure_ascii=False)}]
+                    'question_derived_result_contract':instruction(question),
+                    'focused_schema_graph':focused_relations(question)},ensure_ascii=False)}]
     body=json.dumps({'model':model,'temperature':0,'messages':messages},ensure_ascii=False).encode('utf8')
     request=Request(base+'/chat/completions',data=body,headers={
         'Authorization':'Bearer '+key,'Content-Type':'application/json'},method='POST')

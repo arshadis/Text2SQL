@@ -135,3 +135,21 @@ The new checks are observable SQL-vs-question invariants, not stored reference
 solutions. No question IDs, reference SQL or inferred 3/5 ranking defaults are
 used in production. Review evidence now retains both original and revised SQL.
 A v4.7 public score is **not** known until the matching deployment is evaluated.
+
+## v4.9 — catalog-derived focused schema and true-tie handling
+
+The user's v4.8 public outcome was 7/17 with all three live traces. This
+revision makes no claim to a new live score. It builds a *question-conditioned
+catalog subset* exclusively from `sqlite_master`, PRAGMA table information and
+foreign key metadata. No evaluation questions, golden SQL, expected result
+rows, or special leaderboard sizes are loaded or routed in production.
+
+A separate general output safeguard expands a trailing `LIMIT 1` only if a
+read-only database preview confirms additional rows **tied for first** on the
+same projected numeric metric. Explicit Top-1 and unambiguous single league
+leader requests are excluded. This may intentionally diverge from gold-result
+benchmarks that silently expect a fixed top-k among equally ranked entities.
+
+The local offline suite tests the graph, referential integrity, security and
+ranking behavior but does **not** substitute for running the model on the
+public deployment. Do not reuse the previous model evaluation report.
