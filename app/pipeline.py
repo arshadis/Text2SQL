@@ -9,6 +9,7 @@ from .quality import reconsider_refusal, reconsider_clarification, review_feedba
 from .contract import diagnostics, infer_contract
 from .normalizer import normalize
 from .narrative import summarize
+from .schema_evidence import explain_available_data
 
 WRITE_CUES = re.compile(r'\b(?:delete|drop|truncate|update|insert|alter|create|remove\s+from|wipe|erase)\b|(?:حذف\s*کن|پاک\s*کن|پاک\s*کردن|ویرایش\s*کن|اضافه\s*کن|تغییر\s*بده|بازی\s*ها\s*را\s*پاک)',re.I)
 
@@ -71,6 +72,26 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                 diag={**diag,'clarification_review':'kept_clarification'}
         except ModelError:
             diag={**diag,'clarification_review':'review_unavailable'}
+    if (action=='ask_clarifying_question' and review_enabled and
+            reconsider_clarification(question)):
+        # Bounded final check grounded in available schema facts. A genuine
+        # ambiguity is never replaced with an invented metric or referent.
+        try:
+            evidence=explain_available_data(question)
+            if evidence['relations']:
+                checked,check_diag=review_planner(question,previous_question=previous_question,feedback={
+                    'mode':'schema_evidence_clarification_check',
+                    'readonly_schema_evidence':evidence,
+                    'instruction':('Does this metadata establish that the specified metric is recorded? '
+                        'If subject and metric are clear, generate read-only SQL from the schema. '
+                        'Otherwise retain clarification. Never guess a missing criterion.'),
+                })
+                diag={**diag,'latency_ms':diag.get('latency_ms',0)+check_diag.get('latency_ms',0),
+                      'schema_evidence_review':'query' if checked['action']=='answer_from_query' else 'kept_clarification'}
+                if checked['action']=='answer_from_query':
+                    route=checked;action=checked['action'];intent=str(checked.get('intent') or intent)[:100]
+        except (ModelError, ValueError, OSError):
+            pass
     if action=='ask_clarifying_question':
         followup=str(route.get('clarification') or 'لطفاً معیار مدنظرتان را دقیق‌تر مشخص کنید.')[:300]
         return result(intent=intent,action=action,model_diagnostics=diag,
@@ -88,7 +109,24 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                 route=second;action=second['action'];intent=str(second.get('intent') or intent)[:100]
                 diag={**second_diag,'latency_ms':diag.get('latency_ms',0)+second_diag.get('latency_ms',0),
                       'quality_review':'refusal_reconsidered'}
-        except ModelError:
+            else:
+                evidence=explain_available_data(question)
+                if evidence['relations']:
+                    third,third_diag=review_planner(question,previous_question=previous_question,feedback={
+                        'mode':'schema_evidence_answerability_check',
+                        'original_reason':str(route.get('reason') or '')[:240],
+                        'readonly_schema_evidence':evidence,
+                        'instruction':('A dedicated change-log table is not needed if repeated observations '
+                            'can be joined or aggregated to derive the requested fact. Use the schema '
+                            'and aggregate metadata, never a guess. Answer with read-only SQL only '
+                            'when the fact is genuinely derivable; otherwise preserve refusal.'),
+                    })
+                    diag={**diag,'latency_ms':diag.get('latency_ms',0)+second_diag.get('latency_ms',0)
+                           +third_diag.get('latency_ms',0),
+                          'schema_evidence_review':'query' if third['action']=='answer_from_query' else 'kept_refusal'}
+                    if third['action']=='answer_from_query':
+                        route=third;action=third['action'];intent=str(third.get('intent') or intent)[:100]
+        except (ModelError, ValueError, OSError):
             pass
     if action in ('refuse_write','refuse_out_of_scope'):
         return result(intent=intent,action=action,model_diagnostics=diag,

@@ -87,6 +87,20 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
         if re.search(r'\b(?:\w+\.)?home_goals\s*=\s*0\s+OR\s+(?:\w+\.)?away_goals\s*=\s*0\b',code,re.I):
             issues.append('Clean sheets must use goals conceded by the goalkeeper’s own team; an OR over home_goals=0 and away_goals=0 credits both goalkeepers.')
 
+    # A goalkeeper clean sheet requires a zero conceded by the keeper's OWN
+    # side, not merely a zero anywhere in the fixture. The test is generic.
+    if keeper_asked and ('clean sheet' in q or 'clean sheets' in q or
+                         'کلین' in q or 'conced' in q or 'گل خورده' in q):
+        if re.search(r'\blineup\b',code,re.I) and re.search(r'\b(?:match|v_match)\b',raw,re.I):
+            same_side=(re.search(r'\bgoals_against\s*=\s*0\b',code,re.I)
+                       or (re.search(r'\bhome_team_id\b',code,re.I)
+                           and re.search(r'\baway_team_id\b',code,re.I)
+                           and re.search(r'\bhome_goals\b',code,re.I)
+                           and re.search(r'\baway_goals\b',code,re.I)
+                           and re.search(r'\bteam_id\b',code,re.I)))
+            if not same_side and re.search(r'\b(?:home_goals|away_goals)\b',code,re.I):
+                issues.append('A goalkeeper clean sheet must test goals conceded by that SAME team, not just a score-zero match.')
+
     # Own-goal events have three football roles: scorer, scorer's club, and
     # the club credited with the goal. The names of both fixture sides alone
     # cannot identify the credited club without a role-aware relationship.

@@ -11,6 +11,13 @@ _TERMS={
     'red_cards':'کارت قرمز','red_card_count':'کارت قرمز',
     'matches_played':'مسابقه','penalties_awarded':'پنالتی','penalties_converted':'پنالتی گل‌شده',
     'minutes':'دقیقه','minutes_played':'دقیقه','total_minutes':'دقیقه',
+    'matches':'مسابقه','match_count':'بازی','total_matches':'بازی',
+    'team':'باشگاه','team_name':'نام باشگاه','home_team':'میزبان',
+    'away_team':'مهمان','stadium_name':'ورزشگاه','coach_name':'سرمربی',
+    'player_name':'بازیکن','goalkeeper_name':'دروازه‌بان',
+    'var_decision_count':'تصمیم VAR','total_substitutions':'تعویض',
+    'home_goals':'گل میزبان','away_goals':'گل مهمان','match_date':'تاریخ مسابقه',
+    'played':'بازی انجام‌شده','goal_diff':'تفاضل گل',
 }
 
 def _fa(value):
@@ -29,8 +36,6 @@ def summarize(data: dict) -> str:
         metrics=[i for i in range(len(columns)) if all(isinstance(r[i],(int,float)) and not isinstance(r[i],bool) for r in rows[:2]) and not columns[i].lower().endswith('_id') and columns[i].lower() not in ('round','minute','added_time')]
         label_idx=next((i for i in range(len(columns)) if all(isinstance(r[i],str) for r in rows[:2]) and 'date' not in columns[i].lower()),None)
         if label_idx is not None and metrics:
-            metric_idx=metrics[-1]
-            # Prefer a clearly named result measure over a numeric entity ID/round.
             metric_idx=metrics[-1]
             unit=_TERMS.get(columns[metric_idx].lower(),columns[metric_idx].replace('_',' '))
             snippets=[]
