@@ -172,4 +172,7 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
         if (re.search(r'\b'+re.escape(nullable)+r'\.[A-Za-z_]+\s*(?:=|!=|<>|IN\s*\()',where.group(1),re.I)
             and not re.search(r'\b'+re.escape(nullable)+r'\.[A-Za-z_]+\s+IS\s+NULL',where.group(1),re.I)):
             issues.append('A WHERE predicate on the nullable side of a LEFT JOIN can discard entities with zero related rows, despite the request for all entities.')
+    # Typed constraints are derived only from the actual visitor wording.
+    from .typed_verifier import inspect_plan
+    issues.extend(inspect_plan(question,sql,data))
     return list(dict.fromkeys(issues))

@@ -30,6 +30,7 @@ def runtime_config_sha256() -> str:
         'GAPGPT_REVIEW_ENABLED':'1',
         'GAPGPT_STRICT_REVIEW':'1',
         'RESULT_NORMALIZATION_ENABLED':'1',
+        'GAPGPT_CONTEXT_MODE':'focused',
     }
     settings={key:os.getenv(key,value) for key,value in defaults.items()}
     payload=json.dumps(settings,sort_keys=True,ensure_ascii=True,separators=(',',':'))

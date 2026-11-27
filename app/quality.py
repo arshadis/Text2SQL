@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from .contract import diagnostics, instruction
 from .schema_graph import focused_relations
+from .query_plan import derive_query_plan
 
 SUPPORTED_TERMS = re.compile(
     r'\b(?:coaches?|managers?|formations?|goalkeepers?|goals?|matches?|cards?|referees?|penalt(?:y|ies)|'
@@ -59,6 +60,7 @@ def review_feedback(question: str, sql: str, data: dict) -> dict:
     return {
         'mode':'generic_semantic_review',
         'question_derived_result_contract':instruction(question),
+        'typed_query_plan':derive_query_plan(question).as_prompt(),
         'focused_schema_graph':focused_relations(question),
         'observed_contract_violations':diagnostics(question,sql,data),
         'instruction':'Revise only if there is a real semantic mistake based on the question and schema. All revised SQL is validated by an independent read-only sandbox.',

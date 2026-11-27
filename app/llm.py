@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 from .contract import instruction
 from .schema_graph import focused_relations
 from .schema_evidence import explain_available_data
+from .context_compiler import compiled_context
+from .query_plan import derive_query_plan
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -169,13 +171,19 @@ def plan(question: str, *, previous_question: str | None=None,
         r'\b(?:change[ds]?|changing|histor(?:y|ical)|different\s+coaches?)\b|'
         r'تغییر|عوض\s+شد|قبلی|سابق',question,re.I))
     observed_evidence=(explain_available_data(question) if temporal_question else None)
+    context_mode=os.getenv('GAPGPT_CONTEXT_MODE','focused').strip().lower()
+    if context_mode not in ('focused','full'):
+        raise ModelError('GAPGPT_CONTEXT_MODE must be focused or full')
+    domain_context=(compiled_context(question) if context_mode=='focused' else
+                    'SCHEMA (authoritative):\n'+SCHEMA+'\n\nSEMANTIC MODEL (authoritative):\n'+SEMANTIC)
     messages=[{'role':'system','content':SYSTEM},
-              {'role':'system','content':'SCHEMA (authoritative):\n'+SCHEMA+'\n\nSEMANTIC MODEL (authoritative):\n'+SEMANTIC},
+              {'role':'system','content':'DATABASE CONTEXT (authoritative):\n'+domain_context},
               {'role':'user','content':json.dumps({'question':question,
                     'previous_question_if_clarifying':previous_question,
                     'validation_feedback_if_repairing':error,
                     'semantic_review_feedback':feedback,
                     'question_derived_result_contract':instruction(question),
+                    'typed_query_plan':derive_query_plan(question).as_prompt(),
                     'focused_schema_graph':focused_relations(question),
                     'time_varying_schema_evidence':observed_evidence},ensure_ascii=False)}]
     body=json.dumps({'model':model,'temperature':0,'messages':messages},ensure_ascii=False).encode('utf8')
