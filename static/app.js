@@ -13,11 +13,12 @@ fetch('/api/meta').then(r=>r.ok?r.json():null).then(d=>{if(d){display('teams',d.
 form.addEventListener('submit',async e=>{
   e.preventDefault();if(!question.value.trim())return;
   send.disabled=true;send.textContent='در حال تحلیل…';
-  $('result').hidden=false; $('table-wrap').hidden=true;
+  $('result').hidden=false; $('table-wrap').hidden=true; $('followup').hidden=true;
+  for(const id of ['action-badge','intent','action','validation','dryrun','tables','fields','rowcount','execution','model','review','review-basis','total','sql','validation-badge','semantic-warnings'])display(id,'—');
   display('answer','در حال تولید و اعتبارسنجی SQL…');
   try {
     const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question:question.value,state}),signal:AbortSignal.timeout(32000)});
+      body:JSON.stringify({question:question.value,state}),signal:AbortSignal.timeout(180000)});
     const data=await response.json();if(!response.ok)throw Error(data.error||`HTTP ${response.status}`);
     state=data.next_state||null;
     display('answer',data.answer);
@@ -29,6 +30,7 @@ form.addEventListener('submit',async e=>{
     const m=data.model_diagnostics;
     display('model',m?`${m.status} · ${m.latency_ms} ms · HTTP ${m.http_status}`:'not called');
     display('review',data.quality_review||'not_run');
+    display('semantic-warnings',entities(data.semantic_warnings));
     const evidence=Array.isArray(data.review_evidence)?data.review_evidence:[];
     display('review-basis',evidence.length?evidence.map(ev=>`${ev.decision}: issues ${ev.original_issues?.length??0}→${ev.candidate_issues?.length??0}, signal ${ev.original_signal??'—'}→${ev.candidate_signal??'—'}`).join(' | '):'—');
     display('total',`${data.total_latency_ms} ms`);display('sql',data.sql||'—');

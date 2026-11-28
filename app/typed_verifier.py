@@ -64,7 +64,7 @@ def inspect_plan(question: str, sql: str, data: dict) -> list[str]:
             formation_line=bool(re.search(r'\b(?:[a-z_][a-z_0-9]*\.)?formation_line\s*=\s*0\b',code,re.I))
             if not keeper and not (starter and formation_line):
                 issues.append('Clean sheet reports must filter to the goalkeeper position (lineup.position=GK or starting formation_line=0); other footballers cannot be credited with keeper clean sheets.')
-            if not starter and not keeper:
+            if not starter:
                 issues.append('Clean sheet reports must count recorded starting goalkeepers, not substitutes or general lineup players.')
             if re.search(r'\bv_team_match\b',code,re.I):
                 # Extract aliases and verify the team-match join uses BOTH

@@ -206,8 +206,25 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
         return result(intent=intent,action='refuse_out_of_scope',sql=None,
                       validation='rejected',model_diagnostics=diag,
                       answer='SQL پیشنهادی تأیید نشد و اجرا نشد: '+str(last_rejection)[:180])
+    # Repair an objectively incorrect SQLite conditional aggregation, not a
+    # hidden grading shape. The replacement undergoes the same sandbox checks.
+    from .aggregate_repair import conditional_count_candidate
+    aggregate_evidence=[]
+    candidate=conditional_count_candidate(question,sql)
+    if candidate:
+        try:
+            alternative=runner(candidate)
+            before=set(diagnostics(question,sql,data))
+            after=set(diagnostics(question,candidate,alternative))
+            if before-after and not after-before and not alternative.get('truncated'):
+                aggregate_evidence.append({'stage':'conditional_count_repair','decision':'accepted',
+                    'original_sql':sql,'candidate_sql':candidate,
+                    'original_issues':sorted(before),'candidate_issues':sorted(after)})
+                sql,data=candidate,alternative
+        except RejectedSQL:
+            pass
     review_status='disabled' if not review_enabled else 'not_run'
-    review_evidence=[]
+    review_evidence=aggregate_evidence
     if review_enabled:
         # ALL candidates, including a second or third model answer, are executed only
         # after the same independent read-only SQL sandbox validation. Ranking and
@@ -346,7 +363,7 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
         'club that benefited', 'own team', 'SAME team', 'double-count',
         'goalkeeper position', 'starting goalkeeper', 'clean sheet reports',
         'BOTH match_id and team_id', 'goals_against=0',
-        'games played at a stadium', 'is_own_goal=1',
+        'games played at a stadium', 'is_own_goal=1', 'Conditional COUNT',
         'fixture sides', 'physically played fixtures',
     )
     before_hard=[v for v in inspect_semantics(question,sql,data)
@@ -412,6 +429,23 @@ def answer(question: str, *, planner=plan, runner=execute_readonly, previous_que
                     normalization='verified_post_repair_projection'
             except RejectedSQL:
                 pass
+    # Deterministic tie ordering for explicit top-N queries. Only the ORDER BY
+    # changes and all measured values must remain exactly the same.
+    from .normalizer import stabilize_explicit_ranking
+    try:
+        stable=stabilize_explicit_ranking(question,sql,data,runner)
+        if stable:
+            proposed,observed=stable
+            before=set(inspect_semantics(question,sql,data))
+            after=set(inspect_semantics(question,proposed,observed))
+            if not after-before:
+                review_evidence.append({'stage':'explicit_ranking_tiebreak','decision':'accepted',
+                    'original_sql':sql,'candidate_sql':proposed,
+                    'original_issues':sorted(before),'candidate_issues':sorted(after)})
+                sql,data=proposed,observed
+                normalization='verified_explicit_ranking_tiebreak'
+    except RejectedSQL:
+        pass
     count=data['row_count']
     # The presentation never invents factual data; the table of rows is the answer.
     summary=summarize(data)

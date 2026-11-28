@@ -72,6 +72,11 @@ def inspect(question: str, sql: str, data: dict, *, explicit_limit: int | None =
                                                    for row in data.get('rows',[])):
         issues.append('The match-score output includes a fixture with NULL final scores; exclude unplayed fixtures before reporting a final result.')
 
+    # COUNT(boolean) counts non-NULL values, including FALSE, in SQLite.
+    from .aggregate_repair import conditional_count_candidate
+    if conditional_count_candidate(question, sql):
+        issues.append('Conditional COUNT counts false non-NULL predicates too; count only TRUE via CASE WHEN, not COUNT(boolean).')
+
     # Overall-league standings cannot be used as a *venue-specific* points
     # measure simply by filtering the list of clubs present at that venue.
     venue_asked=bool(re.search(r'\b(?:home|at\s+home|home\s+games?|away|on\s+the\s+road)\b|(?:خانگی|خانه|میزبان|خارج\s+از\s+خانه|میهمان)',q,re.I))

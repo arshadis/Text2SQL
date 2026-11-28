@@ -118,3 +118,8 @@ Coach on the touchline for that team in that match. Several teams changed coach 
 - Aggregate by unique IDs, then join lookup tables for display names. If rankings tie, order consistently and do not invent a winner.
 - Rows describe a fixed snapshot, not live football results. Questions asking about fans/attendance or current unrecorded facts cannot be answered from this schema.
 - Number of played games should filter `status='finished'`; standings are different because disciplinary `awarded` results count there.
+
+## Aggregate semantics and useful report context
+- In SQLite, `COUNT(condition)` counts both false and true non-NULL values. For conditional counts use `COUNT(CASE WHEN condition THEN 1 END)` or `SUM(CASE WHEN condition THEN 1 ELSE 0 END)`.
+- League points are three per win, one per draw, zero per loss. For a venue-specific total, use outcomes from the requested venue, not total standings points.
+- When the user requests a ranking with an explicit size, use that size and a stable secondary readable name. Never infer a fixed ranking size from benchmark answers. A standings leader report benefits from played, points and goal difference; fixture reports benefit from round and date; staff history benefits from observed round range and count of matches.

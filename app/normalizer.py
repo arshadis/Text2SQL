@@ -264,3 +264,36 @@ def expand_verified_ties(question: str, sql: str, data: dict, runner) -> tuple[s
     if (replacement.get('columns')!=columns or replacement.get('row_count')!=n
         or replacement.get('rows')!=sample[:n]):return None
     return candidate,replacement
+
+
+def stabilize_explicit_ranking(question: str, sql: str, data: dict, runner) -> tuple[str,dict] | None:
+    """For a user-specified top-N only, break metric ties by visible labels.
+
+    This is a narrow sort-only edit. The original and revised metric vectors
+    must match exactly; no joins, filters, measures or limits are changed.
+    """
+    c=infer_contract(question)
+    if c.grain!='ranking' or c.target_rows is None or c.target_rows<2:
+        return None
+    if not isinstance(sql,str):return None
+    statement=sql.strip().rstrip(';')
+    if not re.match(r'^SELECT\s+',statement,re.I) or re.search(r'--|/\*|\b(?:UNION|INTERSECT|EXCEPT|OFFSET)\b',statement,re.I):
+        return None
+    clauses=_top_level_clauses(statement)
+    if 'order' not in clauses or 'limit' not in clauses:return None
+    order=statement[clauses['order']:clauses['limit']].strip()
+    sort=re.fullmatch(r'ORDER\s+BY\s+([A-Za-z_]\w*|[1-9]\d*)\s+(ASC|DESC)',order,re.I)
+    if not sort or not re.fullmatch(r'LIMIT\s+'+str(c.target_rows),statement[clauses['limit']:].strip(),re.I):return None
+    cols=list(data.get('columns') or []); rows=list(data.get('rows') or [])
+    if not rows or len(set(cols))!=len(cols) or data.get('truncated'):return None
+    key=sort.group(1)
+    metric=(int(key)-1 if key.isdigit() else next((i for i,v in enumerate(cols) if v.casefold()==key.casefold()),-1))
+    if not 0<=metric<len(cols) or not all(isinstance(r[metric],(int,float)) and not isinstance(r[metric],bool) for r in rows):return None
+    labels=[i for i,col in enumerate(cols) if i!=metric and re.fullmatch(r'[A-Za-z_]\w*',col) and all(isinstance(r[i],str) for r in rows)]
+    if not labels:return None
+    # Ordinal references unambiguously identify projected labels (even if an
+    # alias also matches a source column). SQLite uses its normal collation.
+    candidate=statement[:clauses['limit']].rstrip()+', '+', '.join(f'{i+1} ASC' for i in labels)+' '+statement[clauses['limit']:]
+    result=runner(candidate)
+    if result.get('columns')!=cols or result.get('truncated') or [r[metric] for r in result.get('rows',[])]!=[r[metric] for r in rows]:return None
+    return candidate,result

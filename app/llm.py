@@ -71,6 +71,8 @@ GENERAL DATABASE ANALYSIS:
   event, entity, entity per match, or entity per time period), then decide the
   aggregation. A frequency question concerns the occurrences of the stated
   event unless it explicitly requests games containing the event.
+- For conditional counts, never use COUNT(predicate): SQLite counts both true and false non-NULL values. Use SUM(CASE WHEN predicate THEN 1 ELSE 0 END), or COUNT(CASE WHEN predicate THEN 1 END). For football points, use three per win, one per draw, zero per loss.
+- A standings report should provide the leading club with played, points and goal difference. A match score report should identify the round/date and both teams/scores. For staff changes, show the range of recorded rounds and number of appearances per coach/club; rounds need not be chronological. For player or coach rankings over a season, show club association when available, preserving the requested aggregation grain. For own-goal event reports distinguish fixture identifier, scorer, scorer club, credited club and recorded timing.
 - Include human-readable entity labels. Use surrogate numeric foreign keys
   to JOIN/GROUP, not as the only displayed identification for a person or team.
   Include visible metrics and relevant match context for useful reporting.

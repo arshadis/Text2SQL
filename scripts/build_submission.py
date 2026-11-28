@@ -91,7 +91,7 @@ Open the public URL, ask a football question in Persian or English, and inspect 
 `traces.json` / `traces.md`: good join, refusal, clarification from public HTTP.
 `schema.sql` / `semantic_model.md`: independent schema and domain mapping.
 `ARCHITECTURE.md` / `DEPLOYMENT.md`: design and deployment instructions.
-`generalization_probe.{json,md}` (if present): independent live-use smoke probes; structural checks, not validated factual accuracy.
+`generalization_probe.{{json,md}}` (if present): independent live-use smoke probes; structural checks, not validated factual accuracy.
 
 ## Caveats
 ''' + ('- '+ '\n- '.join(problems)+'\n' if problems else '- No known eval or trace failures in the attached run; availability beyond the test period is not guaranteed.\n')
@@ -108,6 +108,8 @@ Open the public URL, ask a football question in Persian or English, and inspect 
     archived=ROOT/'docs'/'legacy_tests'
     if archived.is_dir():
         mapping += [(p.relative_to(ROOT).as_posix(),p.read_bytes()) for p in sorted(archived.iterdir()) if p.is_file()]
+    mapping += [(p.relative_to(ROOT).as_posix(),p.read_bytes()) for p in sorted((ROOT/'static').glob('*')) if p.is_file()]
+    mapping += [('data/'+name,(ROOT/'data'/name).read_bytes()) for name in ('football.db','schema.sql','semantic_model.md','eval_questions.json')]
     if (ROOT/'Dockerfile').exists():mapping.append(('Dockerfile',(ROOT/'Dockerfile').read_bytes()))
     # Optional independent user-like probes are evidence, not a second accuracy
     # score. Never mix reports from a different deployed code fingerprint.

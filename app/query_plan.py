@@ -60,7 +60,7 @@ def derive_query_plan(question: str) -> QueryPlan:
         ('yellow cards',(r'\byellow\s+card(?:s)?\b',r'کارت\s+زرد')),
         ('red cards',(r'\bred\s+card(?:s)?\b',r'کارت\s+قرمز')),
         ('clean sheets',(r'\bclean\s+sheets?\b',r'کلین[\s\u200c]*شیت')),
-        ('playing minutes',(r'\bminutes?\s+(?:played|on\s+pitch)\b|\bplayed\s+minutes?\b',r'دقایق\s+بازی|دقیقه\s+بازی')),
+        ('playing minutes',(r'\bminutes?\s+(?:played|on\s+pitch)\b|\bplayed\s+(?:the\s+)?(?:most\s+)?minutes?\b',r'دقایق\s+بازی|دقیقه\s+بازی')),
         ('distinct formations',(r'\b(?:formations?|tactics?)\b',r'آرایش|سیستم\s+بازی')),
         ('recorded substitutions',(r'\bsubstitutions?\b',r'تعویض')),
         ('VAR decisions',(r'\bVAR\b',r'کمک[\s\u200c]*داور\s+ویدئویی')),
